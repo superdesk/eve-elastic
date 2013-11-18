@@ -1,0 +1,6 @@
+*.py[co]
+
+# env
+bin
+lib
+include
