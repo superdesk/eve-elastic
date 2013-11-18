@@ -9,8 +9,7 @@ Elasticsearch data layer for [eve REST framework](http://python-eve.org).
 import eve
 from eve_elastic import Elastic
 
-app = Eve(data=Elastic)
-
+app = eve.Eve(data=Elastic)
 ```
 
 ### TODO v0.1:
