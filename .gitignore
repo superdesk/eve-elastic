@@ -1,6 +1,9 @@
 *.py[co]
 
 # env
-bin
-lib
-include
+/bin
+/lib
+/include
+
+# tests
+/man

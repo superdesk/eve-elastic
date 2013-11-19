@@ -69,6 +69,7 @@ class Elastic(DataLayer):
     def init_app(self, app):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
+
         self.es = ElasticSearch(app.config['ELASTICSEARCH_URL'])
         self.index = app.config['ELASTICSEARCH_INDEX']
 
@@ -76,6 +77,34 @@ class Elastic(DataLayer):
             self.es.create_index(self.index)
         except es_exceptions.IndexAlreadyExistsError:
             pass
+
+        self._put_mapping(app)
+
+    def _get_field_mapping(self, scheme):
+        """Get mapping for given field schema."""
+        if scheme['type'] == 'datetime':
+            return {'type': 'date'}
+        elif scheme['type'] == 'string' and scheme.get('unique'):
+            return {'type': 'string', 'index': 'not_analyzed'}
+        elif scheme['type'] == 'string':
+            return {'type': 'string'}
+
+    def _put_mapping(self, app):
+        """Put mapping for elasticsearch for current schema."""
+        for resource, resource_config in app.config['DOMAIN'].items():
+            properties = {}
+            properties[config.DATE_CREATED] = self._get_field_mapping({'type': 'datetime'})
+            properties[config.LAST_UPDATED] = self._get_field_mapping({'type': 'datetime'})
+
+            for field, scheme in resource_config['scheme'].items():
+                field_mapping = self._get_field_mapping(scheme)
+                if field_mapping:
+                    properties[field] = field_mapping
+
+            datasource = (resource, ) #  TODO: config.SOURCES not available yet (self._datasource_ex(resource))
+            mapping = {}
+            mapping[datasource[0]] = {'properties': properties}
+            self.es.put_mapping(self.index, datasource[0], mapping)
 
     def find(self, resource, req):
         query = {
