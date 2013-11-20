@@ -35,6 +35,7 @@ class TestElasticDriver(TestCase):
     def test_put_mapping(self):
         elastic = Elastic(None)
         elastic.init_app(self.app)
+        elastic.put_mapping(self.app)
 
         mapping = elastic.es.get_mapping(elastic.index)[elastic.index]
         items_mapping = mapping['items']['properties']

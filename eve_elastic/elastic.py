@@ -78,8 +78,6 @@ class Elastic(DataLayer):
         except es_exceptions.IndexAlreadyExistsError:
             pass
 
-        self._put_mapping(app)
-
     def _get_field_mapping(self, scheme):
         """Get mapping for given field schema."""
         if scheme['type'] == 'datetime':
@@ -89,8 +87,11 @@ class Elastic(DataLayer):
         elif scheme['type'] == 'string':
             return {'type': 'string'}
 
-    def _put_mapping(self, app):
-        """Put mapping for elasticsearch for current schema."""
+    def put_mapping(self, app):
+        """Put mapping for elasticsearch for current schema.
+
+        It's not called automatically now, but rather left for user to call it whenever it makes sense.
+        """
         for resource, resource_config in app.config['DOMAIN'].items():
             properties = {}
             properties[config.DATE_CREATED] = self._get_field_mapping({'type': 'datetime'})
