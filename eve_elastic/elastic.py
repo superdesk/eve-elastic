@@ -107,7 +107,10 @@ class Elastic(DataLayer):
             mapping[datasource[0]] = {'properties': properties}
             self.es.put_mapping(self.index, datasource[0], mapping)
 
-    def find(self, resource, req):
+    def find(self, resource, req, sub_resource_lookup):
+        """
+        TODO: implement sub_resource_lookup
+        """
         query = {
             'query': {
                 'query_string': {
