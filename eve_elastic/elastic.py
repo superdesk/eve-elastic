@@ -52,8 +52,8 @@ class ElasticCursor(object):
         """Get hits count."""
         return int(self.hits['hits']['total'])
 
-    def info(self, response):
-        """Add additional info to response."""
+    def extra(self, response):
+        """Add extra info to response."""
         if 'facets' in self.hits:
             response['_facets'] = self.hits['facets']
 
