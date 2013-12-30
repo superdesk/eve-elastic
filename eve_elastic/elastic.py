@@ -13,16 +13,11 @@ def parse_date(date_str):
     return arrow.get(date_str).datetime
 
 
-def convert_dates(doc):
-    """Convert dates in doc into datetime objects.
-
-    This should be supported by future version of pyelasticsearch.
-    """
-    if config.LAST_UPDATED in doc:
-        doc[config.LAST_UPDATED] = parse_date(doc[config.LAST_UPDATED])
-
-    if config.DATE_CREATED in doc:
-        doc[config.DATE_CREATED] = parse_date(doc[config.DATE_CREATED])
+def convert_dates(doc, dates):
+    """Convert dates in doc into datetime objects."""
+    for date_field in dates:
+        if date_field in doc:
+            doc[date_field] = parse_date(doc[date_field])
 
 
 class ElasticCursor(object):
@@ -30,7 +25,7 @@ class ElasticCursor(object):
 
     no_hits = {'hits': {'total': 0, 'hits': []}}
 
-    def __init__(self, hits=None):
+    def __init__(self, hits=None, dates=None):
         """Parse hits into docs."""
         self.hits = hits if hits else self.no_hits
         self.docs = []
@@ -38,7 +33,7 @@ class ElasticCursor(object):
         for hit in self.hits['hits']['hits']:
             doc = hit.get('fields', hit.get('_source', {}))
             doc[config.ID_FIELD] = hit.get('_id')
-            convert_dates(doc)
+            convert_dates(doc, dates)
             self.docs.append(doc)
 
     def __getitem__(self, key):
@@ -152,7 +147,7 @@ class Elastic(DataLayer):
         try:
             args = self._es_args(resource)
             args['es_fiels'] = self._fields(resource)
-            return self._parse_hits(self.es.search(query, **args))
+            return self._parse_hits(self.es.search(query, **args), resource)
         except es_exceptions.ElasticHttpError:
             return ElasticCursor()
 
@@ -171,7 +166,7 @@ class Elastic(DataLayer):
 
             doc = hit.get('fields', hit.get('_source', {}))
             doc['_id'] = hit.get('_id')
-            convert_dates(doc)
+            convert_dates(doc, self._dates(resource))
             return doc
         else:
             query = {
@@ -186,7 +181,7 @@ class Elastic(DataLayer):
 
             try:
                 args['size'] = 1
-                docs = self._parse_hits(self.es.search(query, **args))
+                docs = self._parse_hits(self.es.search(query, **args), resource)
                 return docs.first()
             except es_exceptions.ElasticHttpNotFoundError:
                 return None
@@ -194,7 +189,7 @@ class Elastic(DataLayer):
     def find_list_of_ids(self, resource, ids, client_projection=None):
         args = self._es_args(resource)
         args['es_fields'] = self._fields(resource)
-        return self._parse_hits(self.es.multi_get(ids, **args))
+        return self._parse_hits(self.es.multi_get(ids, **args), resource)
 
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
@@ -224,9 +219,9 @@ class Elastic(DataLayer):
             except es_exceptions.ElasticHttpNotFoundError:
                 return
 
-    def _parse_hits(self, hits):
+    def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
-        return ElasticCursor(hits)
+        return ElasticCursor(hits, self._dates(resource))
 
     def _es_args(self, resource, refresh=None):
         """Get index and doctype args."""
@@ -248,3 +243,12 @@ class Elastic(DataLayer):
     def _default_sort(self, resource):
         datasource = self._datasource(resource)
         return datasource[3]
+
+    def _dates(self, resource):
+        dates = [config.LAST_UPDATED, config.DATE_CREATED]
+        datasource = self._datasource(resource)
+        scheme = config.DOMAIN[datasource[0]]['scheme']
+        for field, field_scheme in scheme.items():
+            if field_scheme['type'] == 'datetime':
+                dates.append(field)
+        return dates
