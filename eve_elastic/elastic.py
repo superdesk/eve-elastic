@@ -73,13 +73,13 @@ class Elastic(DataLayer):
         except es_exceptions.IndexAlreadyExistsError:
             pass
 
-    def _get_field_mapping(self, scheme):
+    def _get_field_mapping(self, schema):
         """Get mapping for given field schema."""
-        if scheme['type'] == 'datetime':
+        if schema['type'] == 'datetime':
             return {'type': 'date'}
-        elif scheme['type'] == 'string' and scheme.get('unique'):
+        elif schema['type'] == 'string' and schema.get('unique'):
             return {'type': 'string', 'index': 'not_analyzed'}
-        elif scheme['type'] == 'string':
+        elif schema['type'] == 'string':
             return {'type': 'string'}
 
     def put_mapping(self, app):
@@ -92,8 +92,8 @@ class Elastic(DataLayer):
             properties[config.DATE_CREATED] = self._get_field_mapping({'type': 'datetime'})
             properties[config.LAST_UPDATED] = self._get_field_mapping({'type': 'datetime'})
 
-            for field, scheme in resource_config['scheme'].items():
-                field_mapping = self._get_field_mapping(scheme)
+            for field, schema in resource_config['schema'].items():
+                field_mapping = self._get_field_mapping(schema)
                 if field_mapping:
                     properties[field] = field_mapping
 
@@ -247,8 +247,8 @@ class Elastic(DataLayer):
     def _dates(self, resource):
         dates = [config.LAST_UPDATED, config.DATE_CREATED]
         datasource = self._datasource(resource)
-        scheme = config.DOMAIN[datasource[0]]['scheme']
-        for field, field_scheme in scheme.items():
-            if field_scheme['type'] == 'datetime':
+        schema = config.DOMAIN[datasource[0]]['schema']
+        for field, field_schema in schema.items():
+            if field_schema['type'] == 'datetime':
                 dates.append(field)
         return dates

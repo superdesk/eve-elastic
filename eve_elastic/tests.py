@@ -13,7 +13,7 @@ class TestElasticDriver(TestCase):
 
     domain = {
         'items': {
-            'scheme': {
+            'schema': {
                 'uri': {'type': 'string', 'unique': True},
                 'name': {'type': 'string'},
                 'firstcreated': {'type': 'datetime'},
