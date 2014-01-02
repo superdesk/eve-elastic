@@ -64,14 +64,8 @@ class Elastic(DataLayer):
     def init_app(self, app):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
-
         self.es = ElasticSearch(app.config['ELASTICSEARCH_URL'])
         self.index = app.config['ELASTICSEARCH_INDEX']
-
-        try:
-            self.es.create_index(self.index)
-        except es_exceptions.IndexAlreadyExistsError:
-            pass
 
     def _get_field_mapping(self, schema):
         """Get mapping for given field schema."""
