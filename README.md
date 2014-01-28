@@ -7,7 +7,13 @@ Eve-Elastic is elasticsearch data layer for [eve REST framework](http://python-e
 - facets support
 - generate mapping for schema
 
-### Usage:
+### Install
+
+```
+$ pip install Eve-Elastic
+```
+
+### Usage
 
 ```python
 
@@ -17,12 +23,12 @@ from eve_elastic import Elastic
 app = eve.Eve(data=Elastic)
 ```
 
-### Configuration
+### Config
 
 There are 2 options for Eve-Elastic taken from `app.config`:
 
-- `ELASTICSEARCH_URL` (default: 'http://localhost:9200/')
-- `ELASTICSEARCH_INDEX` - (default 'eve')
+- `ELASTICSEARCH_URL` (default: ```'http://localhost:9200/'```)
+- `ELASTICSEARCH_INDEX` - (default: ```'eve'```)
 
 ### Facets setup
 
