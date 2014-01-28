@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='Eve-Elastic',
-    version='0.1b',
+    version='0.1.0',
     description='Elasticsearch data layer for eve rest framework',
     license='GPLv3',
     author='Petr Jasek',
