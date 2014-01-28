@@ -1,22 +1,21 @@
 #!/usr/bin/env python
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name='Eve-Elastic',
-    version='0.1-dev',
-    description='Elasticsearch data layer for eve',
+    version='0.1b',
+    description='Elasticsearch data layer for eve rest framework',
+    license='GPLv3',
     author='Petr Jasek',
     author_email='petr.jasek@sourcefabric.org',
     url='https://github.com/petrjasek/eve-elastic',
-    license=open('LICENSE').read(),
-    platforms=['any'],
-    packages=find_packages(),
-    test_suite='elastic.tests',
+    packages=['eve_elastic'],
+    tests_require=['nose'],
     install_requires=[
         'pyelasticsearch==0.6.1',
         'arrow==0.4.2',
-        'Eve==0.2-dev',
+        'Eve==0.2',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -25,6 +24,8 @@ setup(
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
     ],
+    test_suite='eve_elastic.test.test_elastic'
 )

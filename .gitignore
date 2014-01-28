@@ -4,9 +4,11 @@
 /bin
 /lib
 /include
+/build
 
 # tests
 /man
 
 # setup
 *.egg-info
+*.egg

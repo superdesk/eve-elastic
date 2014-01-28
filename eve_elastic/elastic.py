@@ -91,7 +91,7 @@ class Elastic(DataLayer):
                 if field_mapping:
                     properties[field] = field_mapping
 
-            datasource = (resource, ) #  TODO: config.SOURCES not available yet (self._datasource_ex(resource))
+            datasource = (resource, )  # TODO: config.SOURCES not available yet (self._datasource_ex(resource))
             mapping = {}
             mapping[datasource[0]] = {'properties': properties}
             self.es.put_mapping(self.index, datasource[0], mapping)

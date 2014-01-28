@@ -3,11 +3,13 @@
 import eve
 from unittest import TestCase
 from datetime import datetime
-from .elastic import parse_date, Elastic
 from eve.utils import config
+from ..elastic import parse_date, Elastic
+
 
 class TestElasticValidator(TestCase):
     pass
+
 
 class TestElasticDriver(TestCase):
 
