@@ -10,3 +10,5 @@ script:
     - flake8 eve_elastic
     - python setup.py test
 
+services:
+    - elasticsearch
