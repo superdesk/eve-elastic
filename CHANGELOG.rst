@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.1.2 (2014-01-30)
+++++++++++++++++++
+
+- Fix pip install (add missing MANIFEST file)
+
 0.1.1 (2014-01-30)
 ++++++++++++++++++
 
