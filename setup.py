@@ -2,11 +2,21 @@
 
 from setuptools import setup
 
+with open('README.rst') as f:
+    readme = f.read()
+
+with open('CHANGELOG.rst') as f:
+    changelog = f.read()
+
+with open('LICENSE') as f:
+    license = f.read()
+
 setup(
     name='Eve-Elastic',
     version='0.1.0',
     description='Elasticsearch data layer for eve rest framework',
-    license='GPLv3',
+    long_description=readme + '\n\n' + changelog,
+    license=license,
     author='Petr Jasek',
     author_email='petr.jasek@sourcefabric.org',
     url='https://github.com/petrjasek/eve-elastic',
