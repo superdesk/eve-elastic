@@ -121,12 +121,15 @@ class Elastic(DataLayer):
                 sort_dict = dict([(key, 'asc' if sortdir > 0 else 'desc')])
                 query['sort'].append(sort_dict)
 
-        if req.where:
+        if request.args.get('filter'):
+            # if there is a filter param, use it as is
+            query_filter = json.loads(request.args.get('filter'))
+            query['filter'] = query_filter
+        elif req.where:
+            # or use where as term filter
             where = json.loads(req.where)
             if where:
-                query['filter'] = {
-                    'term': where
-                }
+                query['filter'] = {'term': where}
 
         if req.max_results:
             query['size'] = req.max_results
