@@ -3,32 +3,30 @@
 import eve
 from unittest import TestCase
 from datetime import datetime
-from eve.utils import config
+from flask import json
+from eve.utils import config, ParsedRequest
 from ..elastic import parse_date, Elastic
 
 
-class TestElasticValidator(TestCase):
-    pass
-
-
-class TestElasticDriver(TestCase):
-
-    domain = {
-        'items': {
-            'schema': {
-                'uri': {'type': 'string', 'unique': True},
-                'name': {'type': 'string'},
-                'firstcreated': {'type': 'datetime'},
-            },
-            'datasource': {
-                'backend': 'elastic',
-                'projection': {'firstcreated': 1}
-            }
+DOMAIN = {
+    'items': {
+        'schema': {
+            'uri': {'type': 'string', 'unique': True},
+            'name': {'type': 'string'},
+            'firstcreated': {'type': 'datetime'},
+        },
+        'datasource': {
+            'backend': 'elastic',
+            'projection': {'firstcreated': 1}
         }
     }
+}
+
+
+class TestElastic(TestCase):
 
     def setUp(self):
-        settings = {'DOMAIN': self.domain}
+        settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = 'elastic_tests'
         self.app = eve.Eve(settings=settings, data=Elastic)
@@ -61,3 +59,22 @@ class TestElasticDriver(TestCase):
             self.app.data.insert('items', [{'uri': 'test', 'firstcreated': '2012-10-10T11:12:13+0000'}])
             item = self.app.data.find_one('items', uri='test')
             self.assertIsInstance(item['firstcreated'], datetime)
+
+    def test_query_filter_with_filter_dsl(self):
+        with self.app.test_request_context():
+            self.app.data.insert('items', [
+                {'uri': 'u1', 'name': 'foo', 'firstcreated': '2012-01-01T11:12:13+0000'},
+                {'uri': 'u2', 'name': 'bar', 'firstcreated': '2013-01-01T11:12:13+0000'},
+            ])
+
+        query_filter = {
+            'term': {'name': 'foo'}
+        }
+
+        with self.app.test_request_context('?filter=' + json.dumps(query_filter)):
+            req = ParsedRequest()
+            self.assertEquals(1, self.app.data.find('items', req, None).count())
+
+        with self.app.test_request_context('?q=bar&filter=' + json.dumps(query_filter)):
+            req = ParsedRequest()
+            self.assertEquals(0, self.app.data.find('items', req, None).count())
