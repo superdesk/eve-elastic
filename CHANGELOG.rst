@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.1.3 (2014-01-31)
+++++++++++++++++++
+
+- Allow filtering via elasticsearch filter dsl
+
 0.1.2 (2014-01-30)
 ++++++++++++++++++
 
