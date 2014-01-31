@@ -49,16 +49,18 @@ Eve-Elastic supports eve like queries via ``where`` param which work as `term <h
 
 On top of this, there is a predefined `query_string <http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html>`_ query which does fulltext search.
 
-.. code-block:: console
+.. code-block:: bash
 
     $ curl http://localhost:5000/items?q=foo&df=name
 
 - ``q`` - query (default: ``*``)
 - ``df`` - default field (default: ``_all``)
 
-Filter DSL
-~~~~~~~~~~
-For more sophisticated filtering, you can use ``filter`` query param which will be used as filter for the query, using elastic `filter dsl <http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-filters.html>`_.
+
+Filtering
+---------
+For more sophisticated filtering, you can use ``filter`` query param which will be used as filter for the query,
+using elastic `filter dsl <http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-filters.html>`_.
 
 Facets
 ------
@@ -76,4 +78,4 @@ To add a facets support for specific resource, add ``facets`` into its ``datasou
             }
         }
 
-You will find `more info about facets in elasticsearch docs <http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets.html>`_.
+You will find more info about facets in `elasticsearch docs <http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets.html>`_.
