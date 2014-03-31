@@ -32,7 +32,7 @@ Set elastic as your eve data layer.
 .. code-block:: python
 
     import eve
-    form eve_elastic import Elastic
+    from eve_elastic import Elastic
 
     app = eve.Eve(data=Elastic)
 
