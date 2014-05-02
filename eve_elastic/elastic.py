@@ -10,7 +10,10 @@ from eve.utils import config
 
 def parse_date(date_str):
     """Parse elastic datetime string."""
-    return arrow.get(date_str).datetime
+    try:
+        return arrow.get(date_str).datetime
+    except TypeError:
+        return arrow.get(date_str[0]).datetime
 
 
 def convert_dates(doc, dates):
@@ -158,7 +161,10 @@ class Elastic(DataLayer):
             except es_exceptions.ElasticHttpNotFoundError:
                 return
 
-            if not hit['exists']:
+            if 'exists' in hit and not hit['exists']:
+                return
+
+            if 'found' in hit and not hit['found']:
                 return
 
             doc = hit.get('fields', hit.get('_source', {}))
@@ -218,6 +224,7 @@ class Elastic(DataLayer):
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
+        print(hits)
         return ElasticCursor(hits, self._dates(resource))
 
     def _es_args(self, resource, refresh=None):

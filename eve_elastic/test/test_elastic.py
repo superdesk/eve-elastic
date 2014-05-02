@@ -44,7 +44,7 @@ class TestElastic(TestCase):
         elastic.put_mapping(self.app)
 
         mapping = elastic.es.get_mapping(elastic.index)[elastic.index]
-        items_mapping = mapping['items']['properties']
+        items_mapping = mapping['mappings']['items']['properties']
 
         self.assertIn('firstcreated', items_mapping)
         self.assertEquals('date', items_mapping['firstcreated']['type'])
@@ -78,3 +78,10 @@ class TestElastic(TestCase):
         with self.app.test_request_context('?q=bar&filter=' + json.dumps(query_filter)):
             req = ParsedRequest()
             self.assertEquals(0, self.app.data.find('items', req, None).count())
+
+    def test_find_one_by_id(self):
+        # will test elastic 1.0
+        with self.app.test_request_context():
+            self.app.data.insert('items', [{'uri': 'test', config.ID_FIELD: 'testid'}])
+            item = self.app.data.find_one('items', **{config.ID_FIELD: 'testid'})
+            self.assertEquals('testid', item[config.ID_FIELD])
