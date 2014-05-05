@@ -17,7 +17,7 @@ DOMAIN = {
         },
         'datasource': {
             'backend': 'elastic',
-            'projection': {'firstcreated': 1}
+            'projection': {'firstcreated': 1, 'name': 1}
         }
     }
 }
@@ -80,8 +80,16 @@ class TestElastic(TestCase):
             self.assertEquals(0, self.app.data.find('items', req, None).count())
 
     def test_find_one_by_id(self):
-        # will test elastic 1.0
+        """elastic 1.0+ is using 'found' property instead of 'exists'"""
         with self.app.test_request_context():
             self.app.data.insert('items', [{'uri': 'test', config.ID_FIELD: 'testid'}])
             item = self.app.data.find_one('items', **{config.ID_FIELD: 'testid'})
             self.assertEquals('testid', item[config.ID_FIELD])
+
+    def test_formating_fields(self):
+        """when using elastic 1.0+ it puts all requested fields values into a list
+        so instead of {"name": "test"} it returns {"name": ["test"]}"""
+        with self.app.test_request_context():
+            self.app.data.insert('items', [{'uri': 'test', 'name': 'test'}])
+            item = self.app.data.find_one('items', uri='test')
+            self.assertEquals('test', item['name'])
