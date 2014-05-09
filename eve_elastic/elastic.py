@@ -149,6 +149,9 @@ class Elastic(DataLayer):
         if req.page > 1:
             query['from'] = (req.page - 1) * req.max_results
 
+        if request.args.get('source'):
+            query = json.loads(request.args.get('source'))
+
         source_config = config.SOURCES[resource]
         if 'facets' in source_config:
             query['facets'] = source_config['facets']

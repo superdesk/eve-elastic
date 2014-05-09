@@ -93,3 +93,12 @@ class TestElastic(TestCase):
             self.app.data.insert('items', [{'uri': 'test', 'name': 'test'}])
             item = self.app.data.find_one('items', uri='test')
             self.assertEquals('test', item['name'])
+
+    def test_search_via_source_param(self):
+        query = {'query': {'term': {'uri': 'foo'}}}
+        with self.app.test_request_context('?source=' + json.dumps(query)):
+            self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}])
+            self.app.data.insert('items', [{'uri': 'bar', 'name': 'bar'}])
+            req = ParsedRequest()
+            res = self.app.data.find('items', req, None)
+            self.assertEquals(1, res.count())
