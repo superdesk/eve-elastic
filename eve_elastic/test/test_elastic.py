@@ -23,12 +23,16 @@ DOMAIN = {
 }
 
 
+INDEX = 'elastic_tests'
+DOC_TYPE = 'items'
+
+
 class TestElastic(TestCase):
 
     def setUp(self):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
-        settings['ELASTICSEARCH_INDEX'] = 'elastic_tests'
+        settings['ELASTICSEARCH_INDEX'] = INDEX
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.test_request_context():
             self.app.data.remove('items')
@@ -57,7 +61,7 @@ class TestElastic(TestCase):
     def test_dates_are_parsed_on_fetch(self):
         with self.app.test_request_context():
             self.app.data.insert('items', [{'uri': 'test', 'firstcreated': '2012-10-10T11:12:13+0000'}])
-            item = self.app.data.find_one('items', uri='test')
+            item = self.app.data.find_one('items', req=None, uri='test')
             self.assertIsInstance(item['firstcreated'], datetime)
 
     def test_query_filter_with_filter_dsl(self):
@@ -83,7 +87,7 @@ class TestElastic(TestCase):
         """elastic 1.0+ is using 'found' property instead of 'exists'"""
         with self.app.test_request_context():
             self.app.data.insert('items', [{'uri': 'test', config.ID_FIELD: 'testid'}])
-            item = self.app.data.find_one('items', **{config.ID_FIELD: 'testid'})
+            item = self.app.data.find_one('items', req=None, **{config.ID_FIELD: 'testid'})
             self.assertEquals('testid', item[config.ID_FIELD])
 
     def test_formating_fields(self):
@@ -91,7 +95,7 @@ class TestElastic(TestCase):
         so instead of {"name": "test"} it returns {"name": ["test"]}"""
         with self.app.test_request_context():
             self.app.data.insert('items', [{'uri': 'test', 'name': 'test'}])
-            item = self.app.data.find_one('items', uri='test')
+            item = self.app.data.find_one('items', req=None, uri='test')
             self.assertEquals('test', item['name'])
 
     def test_search_via_source_param(self):
@@ -102,3 +106,10 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             res = self.app.data.find('items', req, None)
             self.assertEquals(1, res.count())
+
+    def test_mapping_is_there_after_delete(self):
+        with self.app.test_request_context():
+            self.app.data.put_mapping(self.app)
+            mapping = self.app.data.es.get_mapping(INDEX, DOC_TYPE)
+            self.app.data.remove('items')
+            self.assertEquals(mapping, self.app.data.es.get_mapping(INDEX, DOC_TYPE))

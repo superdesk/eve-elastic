@@ -6,6 +6,7 @@ from pyelasticsearch import ElasticSearch
 from flask import request, json
 from eve.io.base import DataLayer
 from eve.utils import config
+from pyelasticsearch.exceptions import IndexAlreadyExistsError
 
 
 def parse_date(date_str):
@@ -79,14 +80,19 @@ class Elastic(DataLayer):
         self.es = ElasticSearch(app.config['ELASTICSEARCH_URL'])
         self.index = app.config['ELASTICSEARCH_INDEX']
 
+        try:
+            self.es.create_index(self.index)
+        except IndexAlreadyExistsError:
+            pass
+
+        self.put_mapping(app)
+
     def _get_field_mapping(self, schema):
         """Get mapping for given field schema."""
         if schema['type'] == 'datetime':
             return {'type': 'date'}
         elif schema['type'] == 'string' and schema.get('unique'):
             return {'type': 'string', 'index': 'not_analyzed'}
-        elif schema['type'] == 'string':
-            return {'type': 'string'}
 
     def put_mapping(self, app):
         """Put mapping for elasticsearch for current schema.
@@ -94,6 +100,14 @@ class Elastic(DataLayer):
         It's not called automatically now, but rather left for user to call it whenever it makes sense.
         """
         for resource, resource_config in app.config['DOMAIN'].items():
+            datasource = resource_config.get('datasource', {})
+
+            if datasource.get('backend') != 'elastic': # only put mapping for elastic sources
+                continue
+
+            if datasource.get('source', resource) != resource: # only put mapping for core types
+                continue
+
             properties = {}
             properties[config.DATE_CREATED] = self._get_field_mapping({'type': 'datetime'})
             properties[config.LAST_UPDATED] = self._get_field_mapping({'type': 'datetime'})
@@ -103,10 +117,8 @@ class Elastic(DataLayer):
                 if field_mapping:
                     properties[field] = field_mapping
 
-            datasource = (resource, )  # TODO: config.SOURCES not available yet (self._datasource_ex(resource))
-            mapping = {}
-            mapping[datasource[0]] = {'properties': properties}
-            self.es.put_mapping(self.index, datasource[0], mapping)
+            mapping = {'properties': properties}
+            self.es.put_mapping(self.index, resource, mapping, es_ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
         """
@@ -162,7 +174,7 @@ class Elastic(DataLayer):
         except es_exceptions.ElasticHttpError:
             return ElasticCursor()
 
-    def find_one(self, resource, **lookup):
+    def find_one(self, resource, req, **lookup):
 
         def is_found(hit):
             if 'exists' in hit:
@@ -185,17 +197,14 @@ class Elastic(DataLayer):
         else:
             query = {
                 'query': {
-                    'constant_score': {
-                        'filter': {
-                            'term': lookup
-                        }
-                    }
+                    'term': lookup
                 }
             }
 
             try:
                 args['size'] = 1
-                docs = self._parse_hits(self.es.search(query, **args), resource)
+                hits = self.es.search(query, **args)
+                docs = self._parse_hits(hits, resource)
                 return docs.first()
             except es_exceptions.ElasticHttpNotFoundError:
                 return
@@ -223,12 +232,13 @@ class Elastic(DataLayer):
         return self.es.index(document=document, id=id_, **args)
 
     def remove(self, resource, id_=None):
-        args = self._es_args(resource, refresh=True)
+        args = self._es_args(resource)
         if id_:
-            return self.es.delete(id=id_, **args)
+            return self.es.delete(id=id_, refresh=True, **args)
         else:
             try:
-                return self.es.delete_all(**args)
+                query = {'query': {'match_all': {}}}
+                return self.es.delete_by_query(query=query, **args)
             except es_exceptions.ElasticHttpNotFoundError:
                 return
 
