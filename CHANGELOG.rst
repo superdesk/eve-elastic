@@ -3,7 +3,13 @@
 Changelog
 ---------
 
+0.1.7 (2014-05-28)
+++++++++++++++++++
+
+- Preserve mapping after deleting all documents for given type
+
 0.1.6 (2014-05-09)
+++++++++++++++++++
 
 - Support ``source`` param on find.
 
