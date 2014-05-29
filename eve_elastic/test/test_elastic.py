@@ -113,3 +113,9 @@ class TestElastic(TestCase):
             mapping = self.app.data.es.get_mapping(INDEX, DOC_TYPE)
             self.app.data.remove('items')
             self.assertEquals(mapping, self.app.data.es.get_mapping(INDEX, DOC_TYPE))
+
+    def test_find_one_raw(self):
+        with self.app.test_request_context():
+            ids = self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}])
+            item = self.app.data.find_one_raw('items', ids[0])
+            self.assertEquals(item['name'], 'foo')

@@ -2,6 +2,7 @@
 import ast
 import arrow
 import pyelasticsearch.exceptions as es_exceptions
+from bson import ObjectId
 from pyelasticsearch import ElasticSearch
 from flask import request, json
 from eve.io.base import DataLayer
@@ -71,7 +72,8 @@ class Elastic(DataLayer):
 
     serializers = {
         'integer': int,
-        'datetime': parse_date
+        'datetime': parse_date,
+        'objectid': ObjectId,
     }
 
     def init_app(self, app):
@@ -209,6 +211,11 @@ class Elastic(DataLayer):
             except es_exceptions.ElasticHttpNotFoundError:
                 return
 
+    def find_one_raw(self, resource, _id):
+        args = self._es_args(resource)
+        hit = self.es.get(id=_id, **args)
+        return self._parse_hits({'hits': {'hits': [hit]}}, resource).first()
+
     def find_list_of_ids(self, resource, ids, client_projection=None):
         args = self._es_args(resource)
         return self._parse_hits(self.es.multi_get(ids, **args), resource)
@@ -217,14 +224,14 @@ class Elastic(DataLayer):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            doc.update(self.es.index(doc=doc, id=doc.get('_id'), **kwargs))
+            doc.update(self.es.index(doc=self._format_doc(doc), id=doc.get('_id'), **kwargs))
             ids.append(doc['_id'])
         self.es.refresh(self.index)
         return ids
 
     def update(self, resource, id_, updates):
         args = self._es_args(resource, refresh=True)
-        return self.es.update(id=id_, doc=updates, **args)
+        return self.es.update(id=id_, doc=self._format_doc(updates), **args)
 
     def replace(self, resource, id_, document):
         args = self._es_args(resource, refresh=True)
@@ -275,4 +282,11 @@ class Elastic(DataLayer):
     def _default_sort(self, resource):
         datasource = self._datasource(resource)
         return datasource[3]
+
+    def _format_doc(self, doc):
+        """Make document ready for storage."""
+        for k, v in doc.items():
+            if isinstance(v, ObjectId):
+                doc[k] = str(v)
+        return doc
     
