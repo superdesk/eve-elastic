@@ -231,16 +231,15 @@ class Elastic(DataLayer):
         args['overwrite_existing'] = True
         return self.es.index(document=document, id=id_, **args)
 
-    def remove(self, resource, id_=None):
-        args = self._es_args(resource)
-        if id_:
-            return self.es.delete(id=id_, refresh=True, **args)
-        else:
-            try:
-                query = {'query': {'match_all': {}}}
-                return self.es.delete_by_query(query=query, **args)
-            except es_exceptions.ElasticHttpNotFoundError:
-                return
+    def remove(self, resource, lookup=None):
+        args = self._es_args(resource, refresh=True)
+        try:
+            if lookup:
+                return self.es.delete(id=lookup.get('_id'), **args)
+            else:
+                return self.es.delete_all(**args)
+        except es_exceptions.ElasticHttpNotFoundError:
+            return
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
