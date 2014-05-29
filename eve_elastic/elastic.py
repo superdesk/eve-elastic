@@ -102,10 +102,10 @@ class Elastic(DataLayer):
         for resource, resource_config in app.config['DOMAIN'].items():
             datasource = resource_config.get('datasource', {})
 
-            if datasource.get('backend') != 'elastic': # only put mapping for elastic sources
+            if datasource.get('backend') != 'elastic':  # only put mapping for elastic sources
                 continue
 
-            if datasource.get('source', resource) != resource: # only put mapping for core types
+            if datasource.get('source', resource) != resource:  # only put mapping for core types
                 continue
 
             properties = {}
@@ -232,10 +232,10 @@ class Elastic(DataLayer):
         return self.es.index(document=document, id=id_, **args)
 
     def remove(self, resource, lookup=None):
-        args = self._es_args(resource, refresh=True)
+        args = self._es_args(resource)
         try:
             if lookup:
-                return self.es.delete(id=lookup.get('_id'), **args)
+                return self.es.delete(id=lookup.get('_id'), refresh=True, **args)
             else:
                 query = {'query': {'match_all': {}}}
                 return self.es.delete_by_query(query=query, **args)
