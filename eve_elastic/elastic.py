@@ -250,7 +250,7 @@ class Elastic(DataLayer):
             return
 
     def is_empty(self, resource):
-        return self.es.count(resource, {}) == 0
+        return self.es.count({'type': resource}) == 0
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
