@@ -241,6 +241,9 @@ class Elastic(DataLayer):
         except es_exceptions.ElasticHttpNotFoundError:
             return
 
+    def is_empty(self, resource):
+        return self.es.count(resource, {}) == 0
+
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
         datasource = self._datasource(resource)
