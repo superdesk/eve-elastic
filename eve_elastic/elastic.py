@@ -237,7 +237,8 @@ class Elastic(DataLayer):
             if lookup:
                 return self.es.delete(id=lookup.get('_id'), **args)
             else:
-                return self.es.delete_all(**args)
+                query = {'query': {'match_all': {}}}
+                return self.es.delete_by_query(query=query, **args)
         except es_exceptions.ElasticHttpNotFoundError:
             return
 
