@@ -119,3 +119,9 @@ class TestElastic(TestCase):
             ids = self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}])
             item = self.app.data.find_one_raw('items', ids[0])
             self.assertEquals(item['name'], 'foo')
+
+    def test_is_empty(self):
+        with self.app.test_request_context():
+            self.assertTrue(self.app.data.is_empty('items'))
+            self.app.data.insert('items', [{'uri': 'foo'}])
+            self.assertFalse(self.app.data.is_empty('items'))

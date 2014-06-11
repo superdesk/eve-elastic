@@ -251,7 +251,8 @@ class Elastic(DataLayer):
 
     def is_empty(self, resource):
         args = self._es_args(resource)
-        return self.es.count({'query': {'match_all': {}}}, **args) == 0
+        res = self.es.count({'query': {'match_all': {}}}, **args)
+        return res.get('count', 0) == 0
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
