@@ -291,4 +291,3 @@ class Elastic(DataLayer):
             if isinstance(v, ObjectId):
                 doc[k] = str(v)
         return doc
-    
