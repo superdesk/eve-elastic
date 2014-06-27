@@ -9,7 +9,6 @@ from eve.io.base import DataLayer
 from eve.utils import config
 from pyelasticsearch.exceptions import IndexAlreadyExistsError
 from pyelasticsearch.client import JsonEncoder
-from bson.objectid import ObjectId
 
 
 def parse_date(date_str):
