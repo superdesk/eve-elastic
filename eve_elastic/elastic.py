@@ -8,6 +8,8 @@ from flask import request, json
 from eve.io.base import DataLayer
 from eve.utils import config
 from pyelasticsearch.exceptions import IndexAlreadyExistsError
+from pyelasticsearch.client import JsonEncoder
+from bson.objectid import ObjectId
 
 
 def parse_date(date_str):
@@ -38,6 +40,15 @@ def format_doc(hit, schema, dates):
             doc[key] = parse_date(doc[key])
 
     return doc
+
+
+class ElasticJsonEncoder(JsonEncoder):
+    '''Customize the JSON encoder used in Elastic'''
+    def default(self, value):
+        """Convert more Python data types to ES-understandable JSON."""
+        if isinstance(value, ObjectId):
+            return str(value)
+        return super(ElasticJsonEncoder, self).default(value)
 
 
 class ElasticCursor(object):
@@ -80,6 +91,7 @@ class Elastic(DataLayer):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
         self.es = ElasticSearch(app.config['ELASTICSEARCH_URL'])
+        self.es.json_encoder = ElasticJsonEncoder
         self.index = app.config['ELASTICSEARCH_INDEX']
 
         try:
@@ -181,7 +193,7 @@ class Elastic(DataLayer):
         def is_found(hit):
             if 'exists' in hit:
                 hit['found'] = hit['exists']
-            return hit['found']
+            return hit.get('found', False)
 
         args = self._es_args(resource)
 
@@ -224,14 +236,14 @@ class Elastic(DataLayer):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            doc.update(self.es.index(doc=self._format_doc(doc), id=doc.get('_id'), **kwargs))
+            doc.update(self.es.index(doc=doc, id=doc.get('_id'), **kwargs))
             ids.append(doc['_id'])
         self.es.refresh(self.index)
         return ids
 
     def update(self, resource, id_, updates):
         args = self._es_args(resource, refresh=True)
-        return self.es.update(id=id_, doc=self._format_doc(updates), **args)
+        return self.es.update(id=id_, doc=updates, **args)
 
     def replace(self, resource, id_, document):
         args = self._es_args(resource, refresh=True)
@@ -284,10 +296,3 @@ class Elastic(DataLayer):
     def _default_sort(self, resource):
         datasource = self._datasource(resource)
         return datasource[3]
-
-    def _format_doc(self, doc):
-        """Make document ready for storage."""
-        for k, v in doc.items():
-            if isinstance(v, ObjectId):
-                doc[k] = str(v)
-        return doc

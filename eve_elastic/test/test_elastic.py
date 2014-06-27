@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import json
 from eve.utils import config, ParsedRequest
 from ..elastic import parse_date, Elastic
+from bson.objectid import ObjectId
 
 
 DOMAIN = {
@@ -125,3 +126,8 @@ class TestElastic(TestCase):
             self.assertTrue(self.app.data.is_empty('items'))
             self.app.data.insert('items', [{'uri': 'foo'}])
             self.assertFalse(self.app.data.is_empty('items'))
+
+    def test_storing_objectid(self):
+        with self.app.test_request_context():
+            res = self.app.data.insert('items', [{'uri': 'foo', 'user': ObjectId('528de7b03b80a13eefc5e610')}])
+            self.assertEquals(1, len(res))

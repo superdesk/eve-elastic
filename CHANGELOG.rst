@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.1.11 (2014-06-27)
++++++++++++++++++++
+
+- add custom json serializer to work with `bson.ObjectId`
+
 0.1.10 (2014-06-11)
 +++++++++++++++++++
 
