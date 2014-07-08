@@ -2,6 +2,7 @@
 import ast
 import arrow
 import pyelasticsearch.exceptions as es_exceptions
+import logging
 from bson import ObjectId
 from pyelasticsearch import ElasticSearch
 from flask import request, json
@@ -9,6 +10,9 @@ from eve.io.base import DataLayer
 from eve.utils import config
 from pyelasticsearch.exceptions import IndexAlreadyExistsError
 from pyelasticsearch.client import JsonEncoder
+
+
+logger = logging.getLogger(__name__)
 
 
 def parse_date(date_str):
@@ -39,6 +43,11 @@ def format_doc(hit, schema, dates):
             doc[key] = parse_date(doc[key])
 
     return doc
+
+
+def is_elastic(datasource):
+    """Detect if given resource uses elastic."""
+    return datasource.get('backend') == 'elastic' or datasource.get('search_backend') == 'elastic'
 
 
 class ElasticJsonEncoder(JsonEncoder):
@@ -115,7 +124,7 @@ class Elastic(DataLayer):
         for resource, resource_config in app.config['DOMAIN'].items():
             datasource = resource_config.get('datasource', {})
 
-            if datasource.get('backend') != 'elastic':  # only put mapping for elastic sources
+            if not is_elastic(datasource):
                 continue
 
             if datasource.get('source', resource) != resource:  # only put mapping for core types
@@ -183,8 +192,10 @@ class Elastic(DataLayer):
 
         try:
             args = self._es_args(resource)
-            return self._parse_hits(self.es.search(query, **args), resource)
-        except es_exceptions.ElasticHttpError:
+            hits = self.es.search(query, **args)
+            return self._parse_hits(hits, resource)
+        except (es_exceptions.ElasticHttpError) as err:
+            logger.exception(err)
             return ElasticCursor()
 
     def find_one(self, resource, req, **lookup):
@@ -234,6 +245,7 @@ class Elastic(DataLayer):
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
         kwargs.update(self._es_args(resource))
+        print('index', resource, 'into', kwargs['doc_type'])
         for doc in doc_or_docs:
             doc.update(self.es.index(doc=doc, id=doc.get('_id'), **kwargs))
             ids.append(doc['_id'])
