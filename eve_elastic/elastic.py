@@ -245,7 +245,6 @@ class Elastic(DataLayer):
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
         kwargs.update(self._es_args(resource))
-        print('index', resource, 'into', kwargs['doc_type'])
         for doc in doc_or_docs:
             doc.update(self.es.index(doc=doc, id=doc.get('_id'), **kwargs))
             ids.append(doc['_id'])
