@@ -76,7 +76,7 @@ class ElasticCursor(object):
         """Get first doc."""
         return self.docs[0] if self.docs else None
 
-    def count(self):
+    def count(self, **kwargs):
         """Get hits count."""
         return int(self.hits['hits']['total'])
 
