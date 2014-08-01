@@ -5,7 +5,7 @@ import pyelasticsearch.exceptions as es_exceptions
 import logging
 from bson import ObjectId
 from pyelasticsearch import ElasticSearch
-from flask import request, json
+import json
 from eve.io.base import DataLayer
 from eve.utils import config
 from pyelasticsearch.exceptions import IndexAlreadyExistsError
@@ -149,8 +149,8 @@ class Elastic(DataLayer):
         query = {
             'query': {
                 'query_string': {
-                    'query': request.args.get('q', '*'),
-                    'default_field': request.args.get('df', '_all'),
+                    'query': req.args.get('q', '*'),
+                    'default_field': req.args.get('df', '_all'),
                     'default_operator': 'AND'
                 }
             }
@@ -160,16 +160,16 @@ class Elastic(DataLayer):
             req.sort = self._default_sort(resource)
 
         # skip sorting when there is a query to use score
-        if req.sort and 'q' not in request.args:
+        if req.sort and 'q' not in req.args:
             query['sort'] = []
             sort = ast.literal_eval(req.sort)
             for (key, sortdir) in sort:
                 sort_dict = dict([(key, 'asc' if sortdir > 0 else 'desc')])
                 query['sort'].append(sort_dict)
 
-        if request.args.get('filter'):
+        if req.args.get('filter'):
             # if there is a filter param, use it as is
-            query_filter = json.loads(request.args.get('filter'))
+            query_filter = json.loads(req.args.get('filter'))
             query['filter'] = query_filter
         elif req.where:
             # or use where as term filter
@@ -183,8 +183,8 @@ class Elastic(DataLayer):
         if req.page > 1:
             query['from'] = (req.page - 1) * req.max_results
 
-        if request.args.get('source'):
-            query = json.loads(request.args.get('source'))
+        if req.args.get('source'):
+            query = json.loads(req.args.get('source'))
 
         source_config = config.SOURCES[resource]
         if 'facets' in source_config:
