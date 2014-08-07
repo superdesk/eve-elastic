@@ -196,6 +196,8 @@ class Elastic(DataLayer):
             return self._parse_hits(hits, resource)
         except (es_exceptions.ElasticHttpError) as err:
             logger.exception(err)
+            if err.status_code == 400:
+                raise err
             return ElasticCursor()
 
     def find_one(self, resource, req, **lookup):
