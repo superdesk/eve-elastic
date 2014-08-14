@@ -134,3 +134,10 @@ class TestElastic(TestCase):
         with self.app.app_context():
             res = self.app.data.insert('items', [{'uri': 'foo', 'user': ObjectId('528de7b03b80a13eefc5e610')}])
             self.assertEquals(1, len(res))
+
+    def test_sub_resource_lookup(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}])
+            req = ParsedRequest()
+            self.assertEquals(1, self.app.data.find('items', req, {'name': 'foo'}).count())
+            self.assertEquals(0, self.app.data.find('items', req, {'name': 'bar'}).count())

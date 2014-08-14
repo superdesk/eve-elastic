@@ -143,33 +143,35 @@ class Elastic(DataLayer):
             self.es.put_mapping(self.index, resource, mapping, es_ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
-        """
-        TODO: implement sub_resource_lookup
-        """
-        query = {
-            'query': {
-                'query_string': {
-                    'query': req.args.get('q', '*'),
-                    'default_field': req.args.get('df', '_all'),
-                    'default_operator': 'AND'
+        args = getattr(req, 'args', {})
+
+        if args.get('q', None):
+            query = {
+                'query': {
+                    'query_string': {
+                        'query': args.get('q'),
+                        'default_field': args.get('df', '_all'),
+                        'default_operator': 'AND'
+                    }
                 }
             }
-        }
+        else:
+            query = {'query': {'match_all': {}}}
 
         if not req.sort and self._default_sort(resource):
             req.sort = self._default_sort(resource)
 
         # skip sorting when there is a query to use score
-        if req.sort and 'q' not in req.args:
+        if req.sort and 'q' not in args:
             query['sort'] = []
             sort = ast.literal_eval(req.sort)
             for (key, sortdir) in sort:
                 sort_dict = dict([(key, 'asc' if sortdir > 0 else 'desc')])
                 query['sort'].append(sort_dict)
 
-        if req.args.get('filter'):
+        if args.get('filter'):
             # if there is a filter param, use it as is
-            query_filter = json.loads(req.args.get('filter'))
+            query_filter = json.loads(args.get('filter'))
             query['filter'] = query_filter
         elif req.where:
             # or use where as term filter
@@ -183,12 +185,20 @@ class Elastic(DataLayer):
         if req.page > 1:
             query['from'] = (req.page - 1) * req.max_results
 
-        if req.args.get('source'):
-            query = json.loads(req.args.get('source'))
+        if args.get('source'):
+            query = json.loads(args.get('source'))
 
         source_config = config.SOURCES[resource]
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
+
+        if sub_resource_lookup:
+            query['query'] = {
+                'filtered': {
+                    'query': query['query'],
+                    'filter': {'term': sub_resource_lookup}
+                }
+            }
 
         try:
             args = self._es_args(resource)
