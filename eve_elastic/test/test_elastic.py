@@ -18,7 +18,8 @@ DOMAIN = {
         },
         'datasource': {
             'backend': 'elastic',
-            'projection': {'firstcreated': 1, 'name': 1}
+            'projection': {'firstcreated': 1, 'name': 1},
+            'default_sort': [('firstcreated', -1)]
         }
     }
 }

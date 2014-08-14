@@ -158,16 +158,20 @@ class Elastic(DataLayer):
         else:
             query = {'query': {'match_all': {}}}
 
-        if not req.sort and self._default_sort(resource):
-            req.sort = self._default_sort(resource)
-
-        # skip sorting when there is a query to use score
-        if req.sort and 'q' not in args:
+        def set_sort(sort):
             query['sort'] = []
-            sort = ast.literal_eval(req.sort)
             for (key, sortdir) in sort:
                 sort_dict = dict([(key, 'asc' if sortdir > 0 else 'desc')])
                 query['sort'].append(sort_dict)
+
+        # use default sort when there is no sort set
+        if not req.sort and self._default_sort(resource):
+            set_sort(self._default_sort(resource))
+
+        # skip sorting when there is a query to use score
+        if req.sort and 'q' not in args:
+            sort = ast.literal_eval(req.sort)
+            set_sort(sort)
 
         if args.get('filter'):
             # if there is a filter param, use it as is
