@@ -298,7 +298,7 @@ class Elastic(DataLayer):
         schema = config.DOMAIN[datasource[0]]['schema']
         dates = get_dates(schema)
         docs = []
-        for hit in hits['hits']['hits']:
+        for hit in hits.get('hits', {}).get('hits', []):
             docs.append(format_doc(hit, schema, dates))
         return ElasticCursor(hits, docs)
 
