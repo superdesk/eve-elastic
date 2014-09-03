@@ -274,7 +274,7 @@ class Elastic(DataLayer):
     def replace(self, resource, id_, document):
         args = self._es_args(resource, refresh=True)
         args['overwrite_existing'] = True
-        return self.es.index(document=document, id=id_, **args)
+        return self.es.index(doc=document, id=id_, **args)
 
     def remove(self, resource, lookup=None):
         args = self._es_args(resource)

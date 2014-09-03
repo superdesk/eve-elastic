@@ -140,5 +140,6 @@ class TestElastic(TestCase):
         with self.app.app_context():
             self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}])
             req = ParsedRequest()
+            req.args = {}
             self.assertEquals(1, self.app.data.find('items', req, {'name': 'foo'}).count())
             self.assertEquals(0, self.app.data.find('items', req, {'name': 'bar'}).count())
