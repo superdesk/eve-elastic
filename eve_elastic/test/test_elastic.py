@@ -136,6 +136,14 @@ class TestElastic(TestCase):
             res = self.app.data.insert('items', [{'uri': 'foo', 'user': ObjectId('528de7b03b80a13eefc5e610')}])
             self.assertEquals(1, len(res))
 
+    def test_replace(self):
+        with self.app.app_context():
+            res = self.app.data.insert('items', [{'uri': 'foo', 'user': ObjectId('528de7b03b80a13eefc5e610')}])
+            self.assertEquals(1, len(res))
+            new_item = {'uri': 'bar', 'user': ObjectId('528de7b03b80a13eefc5d456')}
+            res = self.app.data.replace('items', res.pop(), new_item)
+            self.assertEquals(2, res['_version'])
+
     def test_sub_resource_lookup(self):
         with self.app.app_context():
             self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}])
