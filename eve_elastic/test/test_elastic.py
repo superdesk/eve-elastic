@@ -33,7 +33,7 @@ DOMAIN = {
             'backend': 'elastic',
             'projection': {'firstcreated': 1, 'name': 1},
             'default_sort': [('firstcreated', -1)],
-            'filter': {'exists': {'field': 'description'}}
+            'elastic_filter': {'exists': {'field': 'description'}}
         }
     }
 }

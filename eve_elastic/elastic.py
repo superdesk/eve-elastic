@@ -193,8 +193,8 @@ class Elastic(DataLayer):
             query = json.loads(args.get('source'))
 
         source_config = config.SOURCES[resource]
-        if source_config.get('filter', None):
-            resource_filter = source_config.get('filter', {})
+        if source_config.get('elastic_filter', None):
+            resource_filter = source_config.get('elastic_filter', {})
             existing_filter = query.get('filter', None)
             if existing_filter:
                 filter_lists = [existing_filter, resource_filter]
