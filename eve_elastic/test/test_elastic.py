@@ -21,6 +21,20 @@ DOMAIN = {
             'projection': {'firstcreated': 1, 'name': 1},
             'default_sort': [('firstcreated', -1)]
         }
+    },
+    'items_with_description': {
+        'schema': {
+            'uri': {'type': 'string', 'unique': True},
+            'name': {'type': 'string'},
+            'description': {'type': 'string'},
+            'firstcreated': {'type': 'datetime'},
+        },
+        'datasource': {
+            'backend': 'elastic',
+            'projection': {'firstcreated': 1, 'name': 1},
+            'default_sort': [('firstcreated', -1)],
+            'filter': {'exists': {'field': 'description'}}
+        }
     }
 }
 
@@ -38,6 +52,7 @@ class TestElastic(TestCase):
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
             self.app.data.remove('items')
+            self.app.data.remove('items_with_description')
 
     def test_parse_date(self):
         date = parse_date('2013-11-06T07:56:01.414944+00:00')
@@ -87,6 +102,28 @@ class TestElastic(TestCase):
             req.args = {'q': 'bar', 'filter': json.dumps(query_filter)}
             self.assertEquals(0, self.app.data.find('items', req, None).count())
 
+    def test_query_filter_with_filter_dsl_and_schema_filter(self):
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [
+                {'uri': 'u1', 'name': 'foo', 'firstcreated': '2012-01-01T11:12:13+0000'},
+                {'uri': 'u2', 'name': 'foo', 'firstcreated': '2013-01-01T11:12:13+0000'},
+                {'uri': 'u3', 'name': 'foo', 'description': 'test', 'firstcreated': '2013-01-01T11:12:13+0000'},
+            ])
+
+        query_filter = {
+            'term': {'name': 'foo'}
+        }
+
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {'filter': json.dumps(query_filter)}
+            self.assertEquals(1, self.app.data.find('items_with_description', req, None).count())
+
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {'q': 'bar', 'filter': json.dumps(query_filter)}
+            self.assertEquals(0, self.app.data.find('items_with_description', req, None).count())
+
     def test_find_one_by_id(self):
         """elastic 1.0+ is using 'found' property instead of 'exists'"""
         with self.app.app_context():
@@ -110,6 +147,16 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {'source': json.dumps(query)}
             res = self.app.data.find('items', req, None)
+            self.assertEquals(1, res.count())
+
+    def test_search_via_source_param_and_schema_filter(self):
+        query = {'query': {'term': {'uri': 'foo'}}}
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo', 'description': 'test', 'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'bar', 'name': 'bar'}])
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query)}
+            res = self.app.data.find('items_with_description', req, None)
             self.assertEquals(1, res.count())
 
     def test_mapping_is_there_after_delete(self):
@@ -151,3 +198,11 @@ class TestElastic(TestCase):
             req.args = {}
             self.assertEquals(1, self.app.data.find('items', req, {'name': 'foo'}).count())
             self.assertEquals(0, self.app.data.find('items', req, {'name': 'bar'}).count())
+
+    def test_sub_resource_lookup_with_schema_filter(self):
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo', 'description': 'test', 'name': 'foo'}])
+            req = ParsedRequest()
+            req.args = {}
+            self.assertEquals(1, self.app.data.find('items_with_description', req, {'name': 'foo'}).count())
+            self.assertEquals(0, self.app.data.find('items_with_description', req, {'name': 'bar'}).count())
