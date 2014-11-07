@@ -1,15 +1,12 @@
 
 import ast
-import arrow
-import pyelasticsearch.exceptions as es_exceptions
-import logging
-from bson import ObjectId
-from pyelasticsearch import ElasticSearch
 import json
-from eve.io.base import DataLayer
+import arrow
+import logging
+import elasticsearch
+from bson import ObjectId
 from eve.utils import config
-from pyelasticsearch.exceptions import IndexAlreadyExistsError
-from pyelasticsearch.client import JsonEncoder
+from eve.io.base import DataLayer
 
 
 logger = logging.getLogger(__name__)
@@ -50,13 +47,13 @@ def is_elastic(datasource):
     return datasource.get('backend') == 'elastic' or datasource.get('search_backend') == 'elastic'
 
 
-class ElasticJsonEncoder(JsonEncoder):
-    '''Customize the JSON encoder used in Elastic'''
+class ElasticJSONSerializer(elasticsearch.JSONSerializer):
+    """Customize the JSON serializer used in Elastic"""
     def default(self, value):
-        """Convert more Python data types to ES-understandable JSON."""
+        """Convert mongo.ObjectId."""
         if isinstance(value, ObjectId):
             return str(value)
-        return super(ElasticJsonEncoder, self).default(value)
+        return super().default(value)
 
 
 class ElasticCursor(object):
@@ -86,6 +83,20 @@ class ElasticCursor(object):
             response['_facets'] = self.hits['facets']
 
 
+def set_filters(query, *args):
+        """Combine given filters."""
+        filters = [x for x in args if x is not None]
+        if filters:
+            query['filter'] = {'and': filters}
+
+
+def set_sort(query, sort):
+    query['sort'] = []
+    for (key, sortdir) in sort:
+        sort_dict = dict([(key, 'asc' if sortdir > 0 else 'desc')])
+        query['sort'].append(sort_dict)
+
+
 class Elastic(DataLayer):
     """ElasticSearch data layer."""
 
@@ -98,13 +109,15 @@ class Elastic(DataLayer):
     def init_app(self, app):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
-        self.es = ElasticSearch(app.config['ELASTICSEARCH_URL'])
-        self.es.json_encoder = ElasticJsonEncoder
+
         self.index = app.config['ELASTICSEARCH_INDEX']
+        self.es = elasticsearch.Elasticsearch(app.config['ELASTICSEARCH_URL'])
+        self.es.transport.serializer = ElasticJSONSerializer()
+        self.es_indices = elasticsearch.client.IndicesClient(self.es)
 
         try:
-            self.es.create_index(self.index)
-        except IndexAlreadyExistsError:
+            self.es_indices.create(self.index)
+        except elasticsearch.TransportError:
             pass
 
         self.put_mapping(app)
@@ -140,48 +153,38 @@ class Elastic(DataLayer):
                     properties[field] = field_mapping
 
             mapping = {'properties': properties}
-            self.es.put_mapping(self.index, resource, mapping, es_ignore_conflicts=True)
+            self.es_indices.put_mapping(index=self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
         args = getattr(req, 'args', {})
 
+        if args.get('source'):
+            query = json.loads(args.get('source'))
+            if 'filtered' not in query.get('query', {}):
+                _query = query.get('query')
+                query['query'] = {'filtered': {}}
+                if _query:
+                    query['query']['filtered']['query'] = _query
+        else:
+            query = {'query': {'filtered': {}}}
+
         if args.get('q', None):
-            query = {
-                'query': {
-                    'query_string': {
-                        'query': args.get('q'),
-                        'default_field': args.get('df', '_all'),
-                        'default_operator': 'AND'
+            query['query']['filtered']['query'] = {
+                'query_string': {
+                    'query': args.get('q'),
+                    'default_field': args.get('df', '_all'),
+                    'default_operator': 'AND',
                     }
                 }
-            }
-        else:
-            query = {'query': {'match_all': {}}}
-
-        def set_sort(sort):
-            query['sort'] = []
-            for (key, sortdir) in sort:
-                sort_dict = dict([(key, 'asc' if sortdir > 0 else 'desc')])
-                query['sort'].append(sort_dict)
 
         # use default sort when there is no sort set
         if not req.sort and self._default_sort(resource):
-            set_sort(self._default_sort(resource))
+            set_sort(query, self._default_sort(resource))
 
         # skip sorting when there is a query to use score
         if req.sort and 'q' not in args:
             sort = ast.literal_eval(req.sort)
-            set_sort(sort)
-
-        if args.get('filter'):
-            # if there is a filter param, use it as is
-            query_filter = json.loads(args.get('filter'))
-            query['filter'] = query_filter
-        elif req.where:
-            # or use where as term filter
-            where = json.loads(req.where)
-            if where:
-                query['filter'] = {'term': where}
+            set_sort(query, sort)
 
         if req.max_results:
             query['size'] = req.max_results
@@ -189,40 +192,20 @@ class Elastic(DataLayer):
         if req.page > 1:
             query['from'] = (req.page - 1) * req.max_results
 
-        if args.get('source'):
-            query = json.loads(args.get('source'))
-
         source_config = config.SOURCES[resource]
-        if source_config.get('elastic_filter', None):
-            resource_filter = source_config.get('elastic_filter', {})
-            existing_filter = query.get('filter', None)
-            if existing_filter:
-                filter_lists = [existing_filter, resource_filter]
-                existing_filter = {'and': filter_lists}
-            else:
-                existing_filter = resource_filter
-            query['filter'] = existing_filter
+
+        # filter
+        query_filter = query.get('filter')
+        resource_filter = source_config.get('elastic_filter')
+        sub_resource_filter = {'term': sub_resource_lookup} if sub_resource_lookup else None
+        set_filters(query, resource_filter, query_filter, sub_resource_filter)
 
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
 
-        if sub_resource_lookup:
-            query['query'] = {
-                'filtered': {
-                    'query': query['query'],
-                    'filter': {'term': sub_resource_lookup}
-                }
-            }
-
-        try:
-            args = self._es_args(resource)
-            hits = self.es.search(query, **args)
-            return self._parse_hits(hits, resource)
-        except (es_exceptions.ElasticHttpError) as err:
-            logger.exception(err)
-            if err.status_code == 400:
-                raise err
-            return ElasticCursor()
+        args = self._es_args(resource)
+        hits = self.es.search(body=query, **args)
+        return self._parse_hits(hits, resource)
 
     def find_one(self, resource, req, **lookup):
 
@@ -236,7 +219,7 @@ class Elastic(DataLayer):
         if config.ID_FIELD in lookup:
             try:
                 hit = self.es.get(id=lookup[config.ID_FIELD], **args)
-            except es_exceptions.ElasticHttpNotFoundError:
+            except elasticsearch.NotFoundError:
                 return
 
             if not is_found(hit):
@@ -253,10 +236,10 @@ class Elastic(DataLayer):
 
             try:
                 args['size'] = 1
-                hits = self.es.search(query, **args)
+                hits = self.es.search(body=query, **args)
                 docs = self._parse_hits(hits, resource)
                 return docs.first()
-            except es_exceptions.ElasticHttpNotFoundError:
+            except elasticsearch.NotFoundError:
                 return
 
     def find_one_raw(self, resource, _id):
@@ -270,37 +253,35 @@ class Elastic(DataLayer):
 
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
-        kwargs.update(self._es_args(resource))
+        kwargs.update(self._es_args(resource, refresh=True))
         for doc in doc_or_docs:
-            doc.update(self.es.index(doc=doc, id=doc.get('_id'), **kwargs))
+            doc.update(self.es.index(body=doc, id=doc.get('_id'), **kwargs))
             ids.append(doc['_id'])
-        self.es.refresh(self.index)
         return ids
 
     def update(self, resource, id_, updates):
         args = self._es_args(resource, refresh=True)
-        return self.es.update(id=id_, doc=updates, **args)
+        return self.es.update(id=id_, body={'doc': updates}, **args)
 
     def replace(self, resource, id_, document):
         args = self._es_args(resource, refresh=True)
-        args['overwrite_existing'] = True
-        return self.es.index(doc=document, id=id_, **args)
+        return self.es.index(body=document, id=id_, **args)
 
     def remove(self, resource, lookup=None):
         args = self._es_args(resource)
-        try:
-            if lookup:
-                return self.es.delete(id=lookup.get('_id'), refresh=True, **args)
-            else:
-                query = {'query': {'match_all': {}}}
-                return self.es.delete_by_query(query=query, **args)
-        except es_exceptions.ElasticHttpNotFoundError:
-            return
+        if lookup:
+            return self.es.delete(id=lookup.get('_id'), refresh=True, **args)
+        else:
+            query = {'query': {'match_all': {}}}
+            return self.es.delete_by_query(body=query, **args)
 
     def is_empty(self, resource):
         args = self._es_args(resource)
-        res = self.es.count({'query': {'match_all': {}}}, **args)
+        res = self.es.count(body={'query': {'match_all': {}}}, **args)
         return res.get('count', 0) == 0
+
+    def get_mapping(self, index, doc_type=None):
+        return self.es_indices.get_mapping(index=index, doc_type=doc_type)
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""

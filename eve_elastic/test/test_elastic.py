@@ -64,7 +64,7 @@ class TestElastic(TestCase):
         elastic.init_app(self.app)
         elastic.put_mapping(self.app)
 
-        mapping = elastic.es.get_mapping(elastic.index)[elastic.index]
+        mapping = elastic.get_mapping(elastic.index)[elastic.index]
         items_mapping = mapping['mappings']['items']['properties']
 
         self.assertIn('firstcreated', items_mapping)
@@ -80,27 +80,6 @@ class TestElastic(TestCase):
             self.app.data.insert('items', [{'uri': 'test', 'firstcreated': '2012-10-10T11:12:13+0000'}])
             item = self.app.data.find_one('items', req=None, uri='test')
             self.assertIsInstance(item['firstcreated'], datetime)
-
-    def test_query_filter_with_filter_dsl(self):
-        with self.app.app_context():
-            self.app.data.insert('items', [
-                {'uri': 'u1', 'name': 'foo', 'firstcreated': '2012-01-01T11:12:13+0000'},
-                {'uri': 'u2', 'name': 'bar', 'firstcreated': '2013-01-01T11:12:13+0000'},
-            ])
-
-        query_filter = {
-            'term': {'name': 'foo'}
-        }
-
-        with self.app.app_context():
-            req = ParsedRequest()
-            req.args = {'filter': json.dumps(query_filter)}
-            self.assertEquals(1, self.app.data.find('items', req, None).count())
-
-        with self.app.app_context():
-            req = ParsedRequest()
-            req.args = {'q': 'bar', 'filter': json.dumps(query_filter)}
-            self.assertEquals(0, self.app.data.find('items', req, None).count())
 
     def test_query_filter_with_filter_dsl_and_schema_filter(self):
         with self.app.app_context():
@@ -162,9 +141,9 @@ class TestElastic(TestCase):
     def test_mapping_is_there_after_delete(self):
         with self.app.app_context():
             self.app.data.put_mapping(self.app)
-            mapping = self.app.data.es.get_mapping(INDEX, DOC_TYPE)
+            mapping = self.app.data.get_mapping(INDEX, DOC_TYPE)
             self.app.data.remove('items')
-            self.assertEquals(mapping, self.app.data.es.get_mapping(INDEX, DOC_TYPE))
+            self.assertEquals(mapping, self.app.data.get_mapping(INDEX, DOC_TYPE))
 
     def test_find_one_raw(self):
         with self.app.app_context():
@@ -206,3 +185,17 @@ class TestElastic(TestCase):
             req.args = {}
             self.assertEquals(1, self.app.data.find('items_with_description', req, {'name': 'foo'}).count())
             self.assertEquals(0, self.app.data.find('items_with_description', req, {'name': 'bar'}).count())
+
+    def test_resource_filter(self):
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo', 'description': 'test'}, {'uri': 'bar'}])
+            req = ParsedRequest()
+            req.args = {}
+            req.args['source'] = json.dumps({'query': {'filtered': {'filter': {'term': {'uri': 'bar'}}}}})
+            self.assertEquals(0, self.app.data.find('items_with_description', req, None).count())
+
+    def test_update(self):
+        with self.app.app_context():
+            ids = self.app.data.insert('items', [{'uri': 'foo'}])
+            self.app.data.update('items', ids[0], {'uri': 'bar'})
+            self.assertEquals(self.app.data.find_one('items', req=None, _id=ids[0])['uri'], 'bar')
