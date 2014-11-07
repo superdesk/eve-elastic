@@ -199,3 +199,7 @@ class TestElastic(TestCase):
             ids = self.app.data.insert('items', [{'uri': 'foo'}])
             self.app.data.update('items', ids[0], {'uri': 'bar'})
             self.assertEquals(self.app.data.find_one('items', req=None, _id=ids[0])['uri'], 'bar')
+
+    def test_remove_non_existing_item(self):
+        with self.app.app_context():
+            self.assertEquals(self.app.data.remove('items', {'_id': 'notfound'}), None)

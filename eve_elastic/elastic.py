@@ -270,7 +270,10 @@ class Elastic(DataLayer):
     def remove(self, resource, lookup=None):
         args = self._es_args(resource)
         if lookup:
-            return self.es.delete(id=lookup.get('_id'), refresh=True, **args)
+            try:
+                return self.es.delete(id=lookup.get('_id'), refresh=True, **args)
+            except elasticsearch.NotFoundError:
+                return
         else:
             query = {'query': {'match_all': {}}}
             return self.es.delete_by_query(body=query, **args)
