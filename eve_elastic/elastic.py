@@ -34,6 +34,7 @@ def format_doc(hit, schema, dates):
     """Format given doc to match given schema."""
     doc = hit.get('_source', {})
     doc.setdefault(config.ID_FIELD, hit.get('_id'))
+    doc.setdefault('_type', hit.get('_type'))
 
     for key in dates:
         if key in doc:
