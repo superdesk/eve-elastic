@@ -81,6 +81,9 @@ class ElasticCursor(object):
         """Add extra info to response."""
         if 'facets' in self.hits:
             response['_facets'] = self.hits['facets']
+        if 'aggregations' in self.hits:
+            response['_aggregations'] = self.hits['aggregations']
+
 
 
 def set_filters(query, *args):
@@ -202,6 +205,9 @@ class Elastic(DataLayer):
 
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
+
+        if 'aggs' in source_config:
+            query['aggs'] = source_config['aggs']
 
         args = self._es_args(resource)
         hits = self.es.search(body=query, **args)

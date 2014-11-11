@@ -199,3 +199,10 @@ class TestElastic(TestCase):
             ids = self.app.data.insert('items', [{'uri': 'foo'}])
             self.app.data.update('items', ids[0], {'uri': 'bar'})
             self.assertEquals(self.app.data.find_one('items', req=None, _id=ids[0])['uri'], 'bar')
+
+    def test_resource_aggregates(self):
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {}
+            req.args['source'] = json.dumps({'query': {'aggs':{'type':{'terms':{'field':'name'}}}}})
+            self.assertEquals(3, self.app.data.find('items_with_description', req, None)['_aggregations']['type']['buckets'['doc_count']])
