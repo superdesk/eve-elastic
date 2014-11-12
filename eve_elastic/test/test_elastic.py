@@ -33,7 +33,8 @@ DOMAIN = {
             'backend': 'elastic',
             'projection': {'firstcreated': 1, 'name': 1},
             'default_sort': [('firstcreated', -1)],
-            'elastic_filter': {'exists': {'field': 'description'}}
+            'elastic_filter': {'exists': {'field': 'description'}},
+            'aggregations': {'type': {'terms': {'field': 'name'}}}
         }
     }
 }
@@ -202,7 +203,16 @@ class TestElastic(TestCase):
 
     def test_resource_aggregates(self):
         with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo1', 'description': 'test', 'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'foo2', 'description': 'test1', 'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'foo3', 'description': 'test2', 'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'bar1', 'description': 'test3', 'name': 'bar'}])
             req = ParsedRequest()
             req.args = {}
-            req.args['source'] = json.dumps({'query': {'aggs':{'type':{'terms':{'field':'name'}}}}})
-            self.assertEquals(3, self.app.data.find('items_with_description', req, None)['_aggregations']['type']['buckets'['doc_count']])
+            response = {}
+            item1 = self.app.data.find('items_with_description', req, {'name': 'foo'})
+            item2 = self.app.data.find('items_with_description', req, {'name': 'bar'})
+            item1.extra(response)
+            self.assertEquals(3, item1.count())
+            self.assertEquals(1, item2.count())
+            self.assertEquals(3, response['_aggregations']['type']['buckets'][0]['doc_count'])

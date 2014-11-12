@@ -85,7 +85,6 @@ class ElasticCursor(object):
             response['_aggregations'] = self.hits['aggregations']
 
 
-
 def set_filters(query, *args):
         """Combine given filters."""
         filters = [x for x in args if x is not None]
@@ -206,8 +205,8 @@ class Elastic(DataLayer):
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
 
-        if 'aggs' in source_config:
-            query['aggs'] = source_config['aggs']
+        if 'aggregations' in source_config:
+            query['aggs'] = source_config['aggregations']
 
         args = self._es_args(resource)
         hits = self.es.search(body=query, **args)
