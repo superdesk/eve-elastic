@@ -104,6 +104,17 @@ def set_sort(query, sort):
         query['sort'].append(sort_dict)
 
 
+def get_es(url):
+    o = urlparse(url)
+    es = elasticsearch.Elasticsearch(hosts=[{'host': o.hostname, 'port': o.port}])
+    es.transport.serializer = ElasticJSONSerializer()
+    return es
+
+
+def get_indices(es):
+    return elasticsearch.client.IndicesClient(es)
+
+
 class Elastic(DataLayer):
     """ElasticSearch data layer."""
 
@@ -118,16 +129,9 @@ class Elastic(DataLayer):
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
 
         self.index = app.config['ELASTICSEARCH_INDEX']
-        url = urlparse(app.config['ELASTICSEARCH_URL'])
-        self.es = elasticsearch.Elasticsearch(hosts=[{'host': url.hostname, 'port': url.port}])
-        self.es.transport.serializer = ElasticJSONSerializer()
-        self.es_indices = elasticsearch.client.IndicesClient(self.es)
+        self.es = get_es(app.config['ELASTICSEARCH_URL'])
 
-        try:
-            self.es_indices.create(self.index)
-        except elasticsearch.TransportError:
-            pass
-
+        self.create_index(self.index)
         self.put_mapping(app)
 
     def _get_field_mapping(self, schema):
@@ -137,11 +141,22 @@ class Elastic(DataLayer):
         elif schema['type'] == 'string' and schema.get('unique'):
             return {'type': 'string', 'index': 'not_analyzed'}
 
+    def create_index(self, index=None):
+        if index is None:
+            index = self.index
+        try:
+            get_indices(self.es).create(self.index)
+        except elasticsearch.TransportError:
+            pass
+
     def put_mapping(self, app):
         """Put mapping for elasticsearch for current schema.
 
         It's not called automatically now, but rather left for user to call it whenever it makes sense.
         """
+
+        indices = get_indices(self.es)
+
         for resource, resource_config in app.config['DOMAIN'].items():
             datasource = resource_config.get('datasource', {})
 
@@ -161,7 +176,7 @@ class Elastic(DataLayer):
                     properties[field] = field_mapping
 
             mapping = {'properties': properties}
-            self.es_indices.put_mapping(index=self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
+            indices.put_mapping(index=self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
         args = getattr(req, 'args', {})
@@ -292,7 +307,7 @@ class Elastic(DataLayer):
         return res.get('count', 0) == 0
 
     def get_mapping(self, index, doc_type=None):
-        return self.es_indices.get_mapping(index=index, doc_type=doc_type)
+        return get_indices(self.es).get_mapping(index=index, doc_type=doc_type)
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""

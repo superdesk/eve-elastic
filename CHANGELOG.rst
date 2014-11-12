@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+0.1.17 (2014-11-12)
++++++++++++++++++++
+
+- switch to elasticsearch lib
+- add factory for es and indices
+
 0.1.13 (2014-07-21)
 +++++++++++++++++++
 
