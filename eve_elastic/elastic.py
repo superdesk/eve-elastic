@@ -4,9 +4,15 @@ import json
 import arrow
 import logging
 import elasticsearch
+
 from bson import ObjectId
 from eve.utils import config
 from eve.io.base import DataLayer
+
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 
 logger = logging.getLogger(__name__)
@@ -112,7 +118,8 @@ class Elastic(DataLayer):
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
 
         self.index = app.config['ELASTICSEARCH_INDEX']
-        self.es = elasticsearch.Elasticsearch(app.config['ELASTICSEARCH_URL'])
+        url = urlparse(app.config['ELASTICSEARCH_URL'])
+        self.es = elasticsearch.Elasticsearch(hosts=[{'host': url.hostname, 'port': url.port}])
         self.es.transport.serializer = ElasticJSONSerializer()
         self.es_indices = elasticsearch.client.IndicesClient(self.es)
 

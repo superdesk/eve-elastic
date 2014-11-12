@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import eve
+import elasticsearch
 from unittest import TestCase
 from datetime import datetime
 from flask import json
 from eve.utils import config, ParsedRequest
 from ..elastic import parse_date, Elastic
 from bson.objectid import ObjectId
+from nose.tools import raises
 
 
 DOMAIN = {
@@ -203,3 +205,9 @@ class TestElastic(TestCase):
     def test_remove_non_existing_item(self):
         with self.app.app_context():
             self.assertEquals(self.app.data.remove('items', {'_id': 'notfound'}), None)
+
+    @raises(elasticsearch.exceptions.ConnectionError)
+    def test_it_can_use_configured_url(self):
+        with self.app.app_context():
+            self.app.config['ELASTICSEARCH_URL'] = 'http://localhost:9292'
+            Elastic(self.app)
