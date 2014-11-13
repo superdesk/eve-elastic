@@ -17,6 +17,10 @@ DOMAIN = {
             'uri': {'type': 'string', 'unique': True},
             'name': {'type': 'string'},
             'firstcreated': {'type': 'datetime'},
+            'category': {
+                'type': 'string',
+                'mapping': {'type': 'string', 'index': 'not_analyzed'}
+            },
         },
         'datasource': {
             'backend': 'elastic',
@@ -77,6 +81,7 @@ class TestElastic(TestCase):
         self.assertIn(config.LAST_UPDATED, items_mapping)
 
         self.assertIn('uri', items_mapping)
+        self.assertIn('category', items_mapping)
 
     def test_dates_are_parsed_on_fetch(self):
         with self.app.app_context():

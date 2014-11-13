@@ -138,7 +138,9 @@ class Elastic(DataLayer):
 
     def _get_field_mapping(self, schema):
         """Get mapping for given field schema."""
-        if schema['type'] == 'datetime':
+        if 'mapping' in schema:
+            return schema['mapping']
+        elif schema['type'] == 'datetime':
             return {'type': 'date'}
         elif schema['type'] == 'string' and schema.get('unique'):
             return {'type': 'string', 'index': 'not_analyzed'}
