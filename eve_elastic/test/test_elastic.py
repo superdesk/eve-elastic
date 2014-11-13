@@ -233,3 +233,16 @@ class TestElastic(TestCase):
             self.assertEquals(3, item1.count())
             self.assertEquals(1, item2.count())
             self.assertEquals(3, response['_aggregations']['type']['buckets'][0]['doc_count'])
+
+    def test_put(self):
+        with self.app.app_context():
+            self.app.data.replace('items', 'newid', {'uri': 'foo', '_id': 'newid', '_type': 'x'})
+            self.assertEquals('foo', self.app.data.find_one('items', None, _id='newid')['uri'])
+
+    def test_args_filter(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [{'uri': 'foo'}, {'uri': 'bar'}])
+            req = ParsedRequest()
+            req.args = {}
+            req.args['filter'] = json.dumps({'term': {'uri': 'foo'}})
+            self.assertEquals(1, self.app.data.find('items', req, None).count())

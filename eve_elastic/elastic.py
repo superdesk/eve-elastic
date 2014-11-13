@@ -225,13 +225,16 @@ class Elastic(DataLayer):
         query_filter = query.get('filter')
         resource_filter = source_config.get('elastic_filter')
         sub_resource_filter = {'term': sub_resource_lookup} if sub_resource_lookup else None
-        set_filters(query, resource_filter, query_filter, sub_resource_filter)
+        args_filter = json.loads(args.get('filter')) if args.get('filter') else None
+        set_filters(query, resource_filter, query_filter, sub_resource_filter, args_filter)
 
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
 
         if 'aggregations' in source_config:
             query['aggs'] = source_config['aggregations']
+
+        print(query)
 
         args = self._es_args(resource)
         hits = self.es.search(body=query, **args)
