@@ -234,8 +234,6 @@ class Elastic(DataLayer):
         if 'aggregations' in source_config:
             query['aggs'] = source_config['aggregations']
 
-        print(query)
-
         args = self._es_args(resource)
         hits = self.es.search(body=query, **args)
         return self._parse_hits(hits, resource)
