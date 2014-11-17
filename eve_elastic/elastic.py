@@ -99,7 +99,7 @@ def set_filters(query, base_filters):
     query_filter = query['query']['filtered'].get('filter', None)
     if query_filter is not None:
         if 'and' in query_filter:
-            filters.extend(query_filter)
+            filters.extend(query_filter['and'])
         else:
             filters.append(query_filter)
     if filters:

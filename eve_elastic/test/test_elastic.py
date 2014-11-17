@@ -261,3 +261,21 @@ class TestElastic(TestCase):
             self.assertEqual(1, cursor.count())
             self.assertIn({'key': 'test', 'doc_count': 1}, res['_aggregations']['type']['buckets'])
             self.assertEqual(1, res['_aggregations']['type']['buckets'][0]['doc_count'],)
+
+    def test_filters_with_filtered_query(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [
+                {'uri': 'foo'},
+                {'uri': 'bar'},
+                {'uri': 'baz'},
+            ])
+
+            query = {'query': {'filtered': {'filter': {'and': [
+                {'term': {'uri': 'foo'}},
+                {'term': {'uri': 'bar'}},
+            ]}}}}
+
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query)}
+            cursor = self.app.data.find('items', req, None)
+            self.assertEqual(0, cursor.count())
