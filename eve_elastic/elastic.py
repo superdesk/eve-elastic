@@ -2,7 +2,6 @@
 import ast
 import json
 import arrow
-import logging
 import elasticsearch
 
 from bson import ObjectId
@@ -13,9 +12,6 @@ try:
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
-
-
-logger = logging.getLogger(__name__)
 
 
 def parse_date(date_str):
@@ -92,11 +88,22 @@ class ElasticCursor(object):
             response['_aggregations'] = self.hits['aggregations']
 
 
-def set_filters(query, *args):
-        """Combine given filters."""
-        filters = [x for x in args if x is not None]
-        if filters:
-            query['filter'] = {'and': filters}
+def set_filters(query, base_filters):
+    """Put together all filters we have and set them as 'and' filter
+    within filtered query.
+
+    :param query: elastic query being constructed
+    :param base_filters: all filters set outside of query (eg. resource config, sub_resource_lookup)
+    """
+    filters = [f for f in base_filters if f is not None]
+    query_filter = query['query']['filtered'].get('filter', None)
+    if query_filter is not None:
+        if 'and' in query_filter:
+            filters.extend(query_filter)
+        else:
+            filters.append(query_filter)
+    if filters:
+        query['query']['filtered']['filter'] = {'and': filters}
 
 
 def set_sort(query, sort):
@@ -184,6 +191,7 @@ class Elastic(DataLayer):
 
     def find(self, resource, req, sub_resource_lookup):
         args = getattr(req, 'args', {})
+        source_config = config.SOURCES[resource]
 
         if args.get('source'):
             query = json.loads(args.get('source'))
@@ -214,19 +222,16 @@ class Elastic(DataLayer):
             set_sort(query, sort)
 
         if req.max_results:
-            query['size'] = req.max_results
+            query.setdefault('size', req.max_results)
 
         if req.page > 1:
-            query['from'] = (req.page - 1) * req.max_results
+            query.setdefault('from', (req.page - 1) * req.max_results)
 
-        source_config = config.SOURCES[resource]
-
-        # filter
-        query_filter = query.get('filter')
-        resource_filter = source_config.get('elastic_filter')
-        sub_resource_filter = {'term': sub_resource_lookup} if sub_resource_lookup else None
-        args_filter = json.loads(args.get('filter')) if args.get('filter') else None
-        set_filters(query, resource_filter, query_filter, sub_resource_filter, args_filter)
+        filters = []
+        filters.append(source_config.get('elastic_filter'))
+        filters.append({'term': sub_resource_lookup} if sub_resource_lookup else None)
+        filters.append(json.loads(args.get('filter')) if 'filter' in args else None)
+        set_filters(query, filters)
 
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
@@ -284,10 +289,11 @@ class Elastic(DataLayer):
 
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
-        kwargs.update(self._es_args(resource, refresh=True))
+        kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
             doc.update(self.es.index(body=doc, id=doc.get('_id'), **kwargs))
             ids.append(doc['_id'])
+        get_indices(self.es).refresh(self.index)
         return ids
 
     def update(self, resource, id_, updates):
