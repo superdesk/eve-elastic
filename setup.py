@@ -13,7 +13,7 @@ with open('LICENSE') as f:
 
 setup(
     name='Eve-Elastic',
-    version='0.1.23',
+    version='0.2.0',
     description='Elasticsearch data layer for eve rest framework',
     long_description=readme + '\n\n' + changelog,
     license=license,
@@ -25,7 +25,7 @@ setup(
     install_requires=[
         'elasticsearch>=1.2.0',
         'arrow>=0.4.2',
-        'Eve>=0.2',
+        'Eve>=0.4',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

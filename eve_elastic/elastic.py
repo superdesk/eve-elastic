@@ -5,6 +5,7 @@ import arrow
 import elasticsearch
 
 from bson import ObjectId
+from flask import request
 from eve.utils import config
 from eve.io.base import DataLayer
 
@@ -190,7 +191,7 @@ class Elastic(DataLayer):
             indices.put_mapping(index=self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
-        args = getattr(req, 'args', {})
+        args = getattr(req, 'args', request.args if request else {})
         source_config = config.SOURCES[resource]
 
         if args.get('source'):

@@ -5,7 +5,7 @@ import elasticsearch
 from unittest import TestCase
 from datetime import datetime
 from flask import json
-from eve.utils import config, ParsedRequest
+from eve.utils import config, ParsedRequest, parse_request
 from ..elastic import parse_date, Elastic
 from bson.objectid import ObjectId
 from nose.tools import raises
@@ -279,3 +279,15 @@ class TestElastic(TestCase):
             req.args = {'source': json.dumps(query)}
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(0, cursor.count())
+
+    def test_basic_search_query(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [
+                {'uri': 'foo'},
+                {'uri': 'bar'}
+            ])
+
+        with self.app.test_request_context('/items/?q=foo'):
+            req = parse_request('items')
+            cursor = self.app.data.find('items', req, None)
+            self.assertEquals(1, cursor.count())

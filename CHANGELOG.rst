@@ -3,6 +3,14 @@
 Changelog
 ---------
 
+0.2.0 (2014-11-24)
+++++++++++++++++++
+
+- fix `q` param search for using eve <= 0.4
+- fix `filters` request args filtering
+- let user set mapping in schema
+- support aggregations 
+
 0.1.17 (2014-11-12)
 +++++++++++++++++++
 
