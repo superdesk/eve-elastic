@@ -46,6 +46,10 @@ def format_doc(hit, schema, dates):
     return doc
 
 
+def noop():
+    pass
+
+
 def is_elastic(datasource):
     """Detect if given resource uses elastic."""
     return datasource.get('backend') == 'elastic' or datasource.get('search_backend') == 'elastic'
@@ -230,6 +234,7 @@ class Elastic(DataLayer):
 
         filters = []
         filters.append(source_config.get('elastic_filter'))
+        filters.append(source_config.get('elastic_filter_callback', noop)())
         filters.append({'term': sub_resource_lookup} if sub_resource_lookup else None)
         filters.append(json.loads(args.get('filter')) if 'filter' in args else None)
         set_filters(query, filters)

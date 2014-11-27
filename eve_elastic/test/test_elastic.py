@@ -42,6 +42,15 @@ DOMAIN = {
             'elastic_filter': {'exists': {'field': 'description'}},
             'aggregations': {'type': {'terms': {'field': 'name'}}}
         }
+    },
+    'items_with_callback_filter': {
+        'schema': {
+            'uri': {'type': 'string', 'unique': True}
+        },
+        'datasource': {
+            'backend': 'elastic',
+            'elastic_filter_callback': lambda: {'term': {'uri': 'foo'}}
+        }
     }
 }
 
@@ -58,8 +67,8 @@ class TestElastic(TestCase):
         settings['ELASTICSEARCH_INDEX'] = INDEX
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
-            self.app.data.remove('items')
-            self.app.data.remove('items_with_description')
+            for resource in self.app.config['DOMAIN']:
+                self.app.data.remove(resource)
 
     def test_parse_date(self):
         date = parse_date('2013-11-06T07:56:01.414944+00:00')
@@ -291,3 +300,15 @@ class TestElastic(TestCase):
             req = parse_request('items')
             cursor = self.app.data.find('items', req, None)
             self.assertEquals(1, cursor.count())
+
+    def test_elastic_filter_callback(self):
+        with self.app.app_context():
+            self.app.data.insert('items_with_callback_filter', [
+                {'uri': 'foo'},
+                {'uri': 'bar'},
+            ])
+
+        with self.app.test_request_context():
+            req = parse_request('items_with_callback_filter')
+            cursor = self.app.data.find('items_with_callback_filter', req, None)
+            self.assertEqual(1, cursor.count())

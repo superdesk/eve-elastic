@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.1 (2014-11-27)
+++++++++++++++++++
+
+- allow resource filters being callbacks for request specific filtering
+
 0.2.0 (2014-11-24)
 ++++++++++++++++++
 
