@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.2 (2014-12-02)
+++++++++++++++++++
+
+- make use of score sort if there is a query defined
+
 0.2.1 (2014-11-27)
 ++++++++++++++++++
 

@@ -312,3 +312,17 @@ class TestElastic(TestCase):
             req = parse_request('items_with_callback_filter')
             cursor = self.app.data.find('items_with_callback_filter', req, None)
             self.assertEqual(1, cursor.count())
+
+    def test_elastic_sort_by_score_if_there_is_query(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [
+                {'uri': 'foo', 'name': 'foo bar'},
+                {'uri': 'bar', 'name': 'foo bar'}
+            ])
+
+        with self.app.test_request_context('/items/'):
+            req = parse_request('items')
+            req.args = {'q': 'foo'}
+            cursor = self.app.data.find('items', req, None)
+            self.assertEqual(2, cursor.count())
+            self.assertEqual('foo', cursor[0]['uri'])

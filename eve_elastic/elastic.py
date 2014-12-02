@@ -217,14 +217,12 @@ class Elastic(DataLayer):
                     }
                 }
 
-        # use default sort when there is no sort set
-        if not req.sort and self._default_sort(resource):
-            set_sort(query, self._default_sort(resource))
-
-        # skip sorting when there is a query to use score
-        if req.sort and 'q' not in args:
-            sort = ast.literal_eval(req.sort)
-            set_sort(query, sort)
+        if 'sort' not in query:
+            if req.sort:
+                sort = ast.literal_eval(req.sort)
+                set_sort(query, sort)
+            elif self._default_sort(resource) and 'query' not in query['query']['filtered']:
+                set_sort(query, self._default_sort(resource))
 
         if req.max_results:
             query.setdefault('size', req.max_results)
