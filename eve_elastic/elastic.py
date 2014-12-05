@@ -61,7 +61,7 @@ class ElasticJSONSerializer(elasticsearch.JSONSerializer):
         """Convert mongo.ObjectId."""
         if isinstance(value, ObjectId):
             return str(value)
-        return super().default(value)
+        return super(ElasticJSONSerializer, self).default(value)
 
 
 class ElasticCursor(object):
