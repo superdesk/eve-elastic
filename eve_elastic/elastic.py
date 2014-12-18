@@ -200,6 +200,16 @@ class Elastic(DataLayer):
 
         if args.get('source'):
             query = json.loads(args.get('source'))
+
+            if query.get('query', {}).get('q', None):
+                query['query'] = {
+                    'query_string': {
+                        'query': query.get('query').get('q'),
+                        'lenient': False,
+                        'default_operator': 'AND'
+                        }
+                    }
+
             if 'filtered' not in query.get('query', {}):
                 _query = query.get('query')
                 query['query'] = {'filtered': {}}
@@ -213,7 +223,7 @@ class Elastic(DataLayer):
                 'query_string': {
                     'query': args.get('q'),
                     'default_field': args.get('df', '_all'),
-                    'default_operator': 'AND',
+                    'default_operator': 'AND'
                     }
                 }
 
