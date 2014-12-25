@@ -16,3 +16,5 @@
 *.egg-info
 *.egg
 *.swp
+.idea
+.eggs
