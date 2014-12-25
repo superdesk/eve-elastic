@@ -209,13 +209,8 @@ class Elastic(DataLayer):
             query = {'query': {'filtered': {}}}
 
         if args.get('q', None):
-            query['query']['filtered']['query'] = {
-                'query_string': {
-                    'query': args.get('q'),
-                    'default_field': args.get('df', '_all'),
-                    'default_operator': 'AND',
-                    }
-                }
+            query['query']['filtered']['query'] = _build_query_string(args.get('q'),
+                                                                      default_field=args.get('df', '_all'))
 
         if 'sort' not in query:
             if req.sort:
@@ -357,3 +352,77 @@ class Elastic(DataLayer):
     def _default_sort(self, resource):
         datasource = self._datasource(resource)
         return datasource[3]
+
+
+def build_elastic_query(doc):
+    """
+    Builds a query which follows ElasticSearch syntax from doc.
+    1. Converts {"q":"cricket"} to the below elastic query
+    {
+        "query": {
+            "filtered": {
+                "query": {
+                    "query_string": {
+                        "query": "cricket",
+                        "lenient": false,
+                        "default_operator": "AND"
+                    }
+                }
+            }
+        }
+    }
+
+    2. Converts a faceted query
+    {"q":"cricket", "type":['text'], "source": "AAP"}
+    to the below elastic query
+    {
+        "query": {
+            "filtered": {
+                "filter": {
+                    "and": [
+                        {"terms": {"type": ["text"]}},
+                        {"term": {"source": "AAP"}}
+                    ]
+                },
+                "query": {
+                    "query_string": {
+                        "query": "cricket",
+                        "lenient": false,
+                        "default_operator": "AND"
+                    }
+                }
+            }
+        }
+    }
+
+    :param doc: A document object which is inline with the syntax specified in the examples.
+                It's the developer responsibility to pass right object.
+    :returns ElasticSearch query
+    """
+
+    elastic_query, filters = {"query": {"filtered": {}}}, []
+
+    for key in doc.keys():
+        if key == 'q':
+            elastic_query['query']['filtered']['query'] = _build_query_string(doc['q'])
+        else:
+            _value = doc[key]
+            filters.append({"terms": {key: _value}} if isinstance(_value, list) else {"term": {key: _value}})
+
+    set_filters(elastic_query, filters)
+    return elastic_query
+
+
+def _build_query_string(q, default_field=None):
+    """
+    Builds "query_string" object from 'q'.
+
+    :param: q of type String
+    :param: default_field
+    :return: dictionary object.
+    """
+
+    query_string = {'query_string': {'query': q, 'default_operator': 'AND'}}
+    query_string['query_string'].update({'lenient': False} if default_field else {'default_field': default_field})
+
+    return query_string
