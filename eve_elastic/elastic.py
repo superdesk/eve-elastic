@@ -418,12 +418,12 @@ def _build_query_string(q, default_field=None):
     """
     Builds "query_string" object from 'q'.
 
-    :param: q of type String
+    :param: q of type String or Unicode
     :param: default_field
     :return: dictionary object.
     """
 
-    if not isinstance(q, str):
+    if not (isinstance(q, str) or isinstance(q, unicode)):
         raise TypeError("Invalid type %s for 'q'" % type(q))
 
     query_string = {'query_string': {'query': q, 'default_operator': 'AND'}}
