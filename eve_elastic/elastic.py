@@ -424,7 +424,7 @@ def _build_query_string(q, default_field=None):
     """
 
     if not isinstance(q, str):
-        raise TypeError(message="Invalid type %s for 'q'" % type(q))
+        raise TypeError("Invalid type %s for 'q'" % type(q))
 
     query_string = {'query_string': {'query': q, 'default_operator': 'AND'}}
     query_string['query_string'].update({'lenient': False} if default_field else {'default_field': default_field})
