@@ -161,11 +161,11 @@ class Elastic(DataLayer):
         if index is None:
             index = self.index
         try:
-            get_indices(self.es).create(self.index)
+            get_indices(self.es).create(index)
         except elasticsearch.TransportError:
             pass
 
-    def put_mapping(self, app):
+    def put_mapping(self, app, index=None):
         """Put mapping for elasticsearch for current schema.
 
         It's not called automatically now, but rather left for user to call it whenever it makes sense.
@@ -192,10 +192,10 @@ class Elastic(DataLayer):
                     properties[field] = field_mapping
 
             mapping = {'properties': properties}
-            indices.put_mapping(index=self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
+            indices.put_mapping(index=index or self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
-        args = getattr(req, 'args', request.args if request else {})
+        args = getattr(req, 'args', request.args if request else {}) or {}
         source_config = config.SOURCES[resource]
 
         if args.get('source'):
