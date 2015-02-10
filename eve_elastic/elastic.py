@@ -83,7 +83,7 @@ class ElasticCursor(object):
 
     def count(self, **kwargs):
         """Get hits count."""
-        return int(self.hits['hits']['total'])
+        return int(self.hits.get('hits', {}).get('total', '0'))
 
     def extra(self, response):
         """Add extra info to response."""
