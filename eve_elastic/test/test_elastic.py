@@ -217,6 +217,14 @@ class TestElastic(TestCase):
             self.app.data.update('items', ids[0], {'uri': 'bar'})
             self.assertEqual(self.app.data.find_one('items', req=None, _id=ids[0])['uri'], 'bar')
 
+    def test_remove_with_query(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [{'uri': 'foo'}, {'uri': 'bar'}])
+            self.app.data.remove('items', {'query': {'term': {'uri': 'bar'}}})
+            req = ParsedRequest()
+            req.args = {}
+            self.assertEqual(1, self.app.data.find('items', req, None).count())
+
     def test_remove_non_existing_item(self):
         with self.app.app_context():
             self.assertEqual(self.app.data.remove('items', {'_id': 'notfound'}), None)
