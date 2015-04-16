@@ -3,6 +3,7 @@ import ast
 import json
 import arrow
 import elasticsearch
+from elasticsearch.helpers import bulk
 
 from bson import ObjectId
 from flask import request
@@ -294,6 +295,12 @@ class Elastic(DataLayer):
             ids.append(doc['_id'])
         get_indices(self.es).refresh(self.index)
         return ids
+
+    def bulk_insert(self, resource, docs, **kwargs):
+        kwargs.update(self._es_args(resource))
+        res = bulk(self.es, docs, stats_only=False, **kwargs)
+        get_indices(self.es).refresh(self.index)
+        return res
 
     def update(self, resource, id_, updates):
         args = self._es_args(resource, refresh=True)

@@ -98,6 +98,16 @@ class TestElastic(TestCase):
             item = self.app.data.find_one('items', req=None, uri='test')
             self.assertIsInstance(item['firstcreated'], datetime)
 
+    def test_bulk_insert(self):
+        with self.app.app_context():
+            (count, _errors) = self.app.data.bulk_insert('items_with_description', [
+                {'uri': 'u1', 'name': 'foo', 'firstcreated': '2012-01-01T11:12:13+0000'},
+                {'uri': 'u2', 'name': 'foo', 'firstcreated': '2013-01-01T11:12:13+0000'},
+                {'uri': 'u3', 'name': 'foo', 'description': 'test', 'firstcreated': '2013-01-01T11:12:13+0000'},
+            ])
+            self.assertEquals(3, count)
+            self.assertEquals(0, len(_errors))
+
     def test_query_filter_with_filter_dsl_and_schema_filter(self):
         with self.app.app_context():
             self.app.data.insert('items_with_description', [
