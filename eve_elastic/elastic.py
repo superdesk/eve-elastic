@@ -291,8 +291,8 @@ class Elastic(DataLayer):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            doc.update(self.es.index(body=doc, id=doc.get('_id'), **kwargs))
-            ids.append(doc['_id'])
+            res = self.es.index(body=doc, id=doc.get('_id'), **kwargs)
+            ids.append(res.get('_id', doc.get('_id')))
         get_indices(self.es).refresh(self.index)
         return ids
 
