@@ -3,10 +3,10 @@
 Changelog
 ---------
 
-0.2.8 (2015-04-28)
+0.2.9 (2015-05-11)
 ++++++++++++++++++
 
-- fix: stop extending on insert
+- fix: stop converting null values to datetime
 
 0.2.7 (2015-04-16)
 ++++++++++++++++++

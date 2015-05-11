@@ -7,3 +7,5 @@ Eve-Elastic is written and maintained by:
 * Adrian Magdas
 * Tolga Akin
 * Jonathan Dray
+* Siva Kuna
+* Tolga Akin
