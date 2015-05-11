@@ -18,6 +18,9 @@ except ImportError:
 
 def parse_date(date_str):
     """Parse elastic datetime string."""
+    if not date_str:
+        return None
+
     try:
         date = arrow.get(date_str)
     except TypeError:

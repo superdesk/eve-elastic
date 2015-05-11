@@ -75,6 +75,10 @@ class TestElastic(TestCase):
         self.assertIsInstance(date, datetime)
         self.assertEqual('07:56+0000', date.strftime('%H:%M%z'))
 
+    def test_parse_date_with_null(self):
+        date = parse_date(None)
+        self.assertIsNone(date)
+
     def test_put_mapping(self):
         elastic = Elastic(None)
         elastic.init_app(self.app)
