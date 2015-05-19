@@ -348,3 +348,11 @@ class TestElastic(TestCase):
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(2, cursor.count())
             self.assertEqual('foo', cursor[0]['uri'])
+
+    def test_elastic_find_default_sort_no_mapping(self):
+        self.app.data.es.indices.delete_mapping(INDEX, '_all')
+        with self.app.test_request_context('/items/'):
+            req = parse_request('items')
+            req.args = {}
+            cursor = self.app.data.find('items', req, None)
+            self.assertEqual(0, cursor.count())
