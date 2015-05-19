@@ -243,7 +243,13 @@ class Elastic(DataLayer):
             query['aggs'] = source_config['aggregations']
 
         args = self._es_args(resource)
-        hits = self.es.search(body=query, **args)
+        try:
+            hits = self.es.search(body=query, **args)
+        except elasticsearch.exceptions.RequestError as e:
+            if e.status_code == 400 and "No mapping found for" in e.error:
+                hits = {}
+            else:
+                raise
         return self._parse_hits(hits, resource)
 
     def find_one(self, resource, req, **lookup):
