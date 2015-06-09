@@ -337,7 +337,7 @@ class Elastic(DataLayer):
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
-        datasource = self._datasource(resource)
+        datasource = self.datasource(resource)
         schema = config.DOMAIN[datasource[0]]['schema']
         dates = get_dates(schema)
         docs = []
@@ -347,7 +347,7 @@ class Elastic(DataLayer):
 
     def _es_args(self, resource, refresh=None):
         """Get index and doctype args."""
-        datasource = self._datasource(resource)
+        datasource = self.datasource(resource)
         args = {
             'index': self.index,
             'doc_type': datasource[0],
@@ -358,12 +358,12 @@ class Elastic(DataLayer):
 
     def _fields(self, resource):
         """Get projection fields for given resource."""
-        datasource = self._datasource(resource)
+        datasource = self.datasource(resource)
         keys = datasource[2].keys()
         return ','.join(keys) + ','.join([config.LAST_UPDATED, config.DATE_CREATED])
 
     def _default_sort(self, resource):
-        datasource = self._datasource(resource)
+        datasource = self.datasource(resource)
         return datasource[3]
 
 
