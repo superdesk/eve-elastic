@@ -152,6 +152,11 @@ class Elastic(DataLayer):
         self.create_index(self.index)
         self.put_mapping(app)
 
+    def get_datasource(self, resource):
+        if hasattr(self, '_datasource'):
+            return self._datasource(resource)
+        return self.datasource(resource)
+
     def _get_field_mapping(self, schema):
         """Get mapping for given field schema."""
         if 'mapping' in schema:
@@ -337,7 +342,7 @@ class Elastic(DataLayer):
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
-        datasource = self.datasource(resource)
+        datasource = self.get_datasource(resource)
         schema = config.DOMAIN[datasource[0]]['schema']
         dates = get_dates(schema)
         docs = []
@@ -347,7 +352,7 @@ class Elastic(DataLayer):
 
     def _es_args(self, resource, refresh=None):
         """Get index and doctype args."""
-        datasource = self.datasource(resource)
+        datasource = self.get_datasource(resource)
         args = {
             'index': self.index,
             'doc_type': datasource[0],
@@ -358,12 +363,12 @@ class Elastic(DataLayer):
 
     def _fields(self, resource):
         """Get projection fields for given resource."""
-        datasource = self.datasource(resource)
+        datasource = self.get_datasource(resource)
         keys = datasource[2].keys()
         return ','.join(keys) + ','.join([config.LAST_UPDATED, config.DATE_CREATED])
 
     def _default_sort(self, resource):
-        datasource = self.datasource(resource)
+        datasource = self.get_datasource(resource)
         return datasource[3]
 
 
