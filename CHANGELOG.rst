@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.11 (2015-06-22)
++++++++++++++++++++
+
+- return no hits when trying to find one resource and there is no mapping
+
 0.2.10 (2015-06-12)
 +++++++++++++++++++
 
