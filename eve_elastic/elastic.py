@@ -349,7 +349,9 @@ class Elastic(DataLayer):
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
         datasource = self.get_datasource(resource)
-        schema = config.DOMAIN[datasource[0]]['schema']
+        schema = {}
+        schema.update(config.DOMAIN[datasource[0]].get('schema', {}))
+        schema.update(config.DOMAIN[resource].get('schema', {}))
         dates = get_dates(schema)
         docs = []
         for hit in hits.get('hits', {}).get('hits', []):

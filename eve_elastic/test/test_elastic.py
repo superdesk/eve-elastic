@@ -28,6 +28,15 @@ DOMAIN = {
             'default_sort': [('firstcreated', -1)]
         }
     },
+    'published_items': {
+        'schema': {
+            'published': {'type': 'datetime'}
+        },
+        'datasource': {
+            'backend': 'elastic',
+            'source': 'items',
+        },
+    },
     'items_with_description': {
         'schema': {
             'uri': {'type': 'string', 'unique': True},
@@ -51,7 +60,7 @@ DOMAIN = {
             'backend': 'elastic',
             'elastic_filter_callback': lambda: {'term': {'uri': 'foo'}}
         }
-    }
+    },
 }
 
 
@@ -98,9 +107,11 @@ class TestElastic(TestCase):
 
     def test_dates_are_parsed_on_fetch(self):
         with self.app.app_context():
-            self.app.data.insert('items', [{'uri': 'test', 'firstcreated': '2012-10-10T11:12:13+0000'}])
-            item = self.app.data.find_one('items', req=None, uri='test')
+            ids = self.app.data.insert('items', [{'uri': 'test', 'firstcreated': '2012-10-10T11:12:13+0000'}])
+            self.app.data.update('published_items', ids[0], {'published': '2012-10-10T12:12:13+0000'})
+            item = self.app.data.find_one('published_items', req=None, uri='test')
             self.assertIsInstance(item['firstcreated'], datetime)
+            self.assertIsInstance(item['published'], datetime)
 
     def test_bulk_insert(self):
         with self.app.app_context():
