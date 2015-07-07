@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.12 (2015-07-07)
++++++++++++++++++++
+
+- use both resource and datasource schema to convert datetime values (by Anca Farcas)
+
 0.2.11 (2015-06-22)
 +++++++++++++++++++
 
