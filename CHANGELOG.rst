@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.13 (2015-07-22)
++++++++++++++++++++
+
+- add `default_operator` param to `_build_query_string` (by Mugur Rus)
+
 0.2.12 (2015-07-07)
 +++++++++++++++++++
 
