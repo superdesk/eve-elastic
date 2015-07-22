@@ -219,7 +219,8 @@ class Elastic(DataLayer):
 
         if args.get('q', None):
             query['query']['filtered']['query'] = _build_query_string(args.get('q'),
-                                                                      default_field=args.get('df', '_all'))
+                                                                      default_field=args.get('df', '_all'),
+                                                                      default_operator=args.get('default_operator', 'OR'))
 
         if 'sort' not in query:
             if req.sort:
@@ -239,6 +240,7 @@ class Elastic(DataLayer):
         filters.append(source_config.get('elastic_filter_callback', noop)())
         filters.append({'term': sub_resource_lookup} if sub_resource_lookup else None)
         filters.append(json.loads(args.get('filter')) if 'filter' in args else None)
+        filters.extend(args.get('filters') if 'filters' in args else [])
         set_filters(query, filters)
 
         if 'facets' in source_config:
@@ -439,7 +441,7 @@ def build_elastic_query(doc):
     return elastic_query
 
 
-def _build_query_string(q, default_field=None):
+def _build_query_string(q, default_field=None, default_operator='AND'):
     """
     Builds "query_string" object from 'q'.
 
@@ -448,7 +450,7 @@ def _build_query_string(q, default_field=None):
     :return: dictionary object.
     """
 
-    query_string = {'query_string': {'query': q, 'default_operator': 'AND'}}
+    query_string = {'query_string': {'query': q, 'default_operator': default_operator}}
     query_string['query_string'].update({'lenient': False} if default_field else {'default_field': default_field})
 
     return query_string
