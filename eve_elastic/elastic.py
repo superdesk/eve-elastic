@@ -5,7 +5,6 @@ import arrow
 import elasticsearch
 from elasticsearch.helpers import bulk
 
-from bson import ObjectId
 from flask import request
 from eve.utils import config
 from eve.io.base import DataLayer
@@ -60,12 +59,8 @@ def is_elastic(datasource):
 
 
 class ElasticJSONSerializer(elasticsearch.JSONSerializer):
-    """Customize the JSON serializer used in Elastic"""
-    def default(self, value):
-        """Convert mongo.ObjectId."""
-        if isinstance(value, ObjectId):
-            return str(value)
-        return super(ElasticJSONSerializer, self).default(value)
+    """Customize the JSON serializer used in Elastic."""
+    pass
 
 
 class ElasticCursor(object):
@@ -122,10 +117,13 @@ def set_sort(query, sort):
         query['sort'].append(sort_dict)
 
 
-def get_es(url):
+def get_es(url, **kwargs):
+    """Create elasticsearch client instance.
+
+    :param url: elasticsearch url
+    """
     o = urlparse(url)
-    es = elasticsearch.Elasticsearch(hosts=[{'host': o.hostname, 'port': o.port}])
-    es.transport.serializer = ElasticJSONSerializer()
+    es = elasticsearch.Elasticsearch([{'host': o.hostname, 'port': o.port}], **kwargs)
     return es
 
 
@@ -139,15 +137,19 @@ class Elastic(DataLayer):
     serializers = {
         'integer': int,
         'datetime': parse_date,
-        'objectid': ObjectId,
     }
+
+    def __init__(self, app, **kwargs):
+        """Let user specify extra arguments for Elasticsearch"""
+        self.kwargs = kwargs
+        super(Elastic, self).__init__(app)
 
     def init_app(self, app):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
 
         self.index = app.config['ELASTICSEARCH_INDEX']
-        self.es = get_es(app.config['ELASTICSEARCH_URL'])
+        self.es = get_es(app.config['ELASTICSEARCH_URL'], **self.kwargs)
 
         self.create_index(self.index)
         self.put_mapping(app)
