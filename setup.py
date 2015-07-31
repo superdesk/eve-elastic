@@ -11,6 +11,9 @@ with open('CHANGELOG.rst') as f:
 with open('LICENSE') as f:
     license = f.read()
 
+with open('requirements.txt') as f:
+    install_requires = f.read().strip().split('\n')
+
 setup(
     name='Eve-Elastic',
     version='0.2.14',
@@ -22,11 +25,7 @@ setup(
     url='https://github.com/petrjasek/eve-elastic',
     packages=['eve_elastic'],
     tests_require=['nose'],
-    install_requires=[
-        'elasticsearch>=1.2.0',
-        'arrow>=0.4.2',
-        'Eve>=0.4',
-    ],
+    install_requires=install_requires,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
