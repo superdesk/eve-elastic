@@ -7,7 +7,6 @@ from datetime import datetime
 from flask import json
 from eve.utils import config, ParsedRequest, parse_request
 from ..elastic import parse_date, Elastic
-from bson.objectid import ObjectId
 from nose.tools import raises
 
 
@@ -199,16 +198,11 @@ class TestElastic(TestCase):
             self.app.data.insert('items', [{'uri': 'foo'}])
             self.assertFalse(self.app.data.is_empty('items'))
 
-    def test_storing_objectid(self):
-        with self.app.app_context():
-            res = self.app.data.insert('items', [{'uri': 'foo', 'user': ObjectId('528de7b03b80a13eefc5e610')}])
-            self.assertEqual(1, len(res))
-
     def test_replace(self):
         with self.app.app_context():
-            res = self.app.data.insert('items', [{'uri': 'foo', 'user': ObjectId('528de7b03b80a13eefc5e610')}])
+            res = self.app.data.insert('items', [{'uri': 'foo'}])
             self.assertEqual(1, len(res))
-            new_item = {'uri': 'bar', 'user': ObjectId('528de7b03b80a13eefc5d456')}
+            new_item = {'uri': 'bar'}
             res = self.app.data.replace('items', res.pop(), new_item)
             self.assertEqual(2, res['_version'])
 
