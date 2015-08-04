@@ -163,6 +163,13 @@ class Elastic(DataLayer):
         """Get mapping for given field schema."""
         if 'mapping' in schema:
             return schema['mapping']
+        elif schema['type'] == 'dict' and 'schema' in schema:
+            properties = {}
+            for k, v in schema['schema'].items():
+                field_mapping = self._get_field_mapping(v)
+                if field_mapping is not None:
+                    properties[k] = field_mapping
+            return {'properties': properties} if properties else None
         elif schema['type'] == 'datetime':
             return {'type': 'date'}
         elif schema['type'] == 'string' and schema.get('unique'):
