@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+0.2.15 (2015-08-04)
++++++++++++++++++++
+
+- parse mapping for fields type `dict`
+- avoid hidden dependencies - put it in requirements file (by Dinu Ghermany)
+
 0.2.14 (2015-07-31)
 +++++++++++++++++++
 

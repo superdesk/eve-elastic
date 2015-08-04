@@ -16,7 +16,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='Eve-Elastic',
-    version='0.2.14',
+    version='0.2.15',
     description='Elasticsearch data layer for eve rest framework',
     long_description=readme + '\n\n' + changelog,
     license=license,
