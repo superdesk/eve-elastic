@@ -24,10 +24,20 @@ DOMAIN = {
                 'type': 'dict',
                 'schema': {
                     'place': {'type': 'string'},
-                    'date': {'type': 'datetime'},
+                    'created': {'type': 'datetime'},
                     'extra': {'type': 'dict'},
                 }
-            }
+            },
+            'place': {
+                'type': 'list',
+                'schema': {
+                    'type': 'dict',
+                    'schema': {
+                        'name': {'type': 'string'},
+                        'created': {'type': 'datetime'},
+                    }
+                }
+            },
         },
         'datasource': {
             'backend': 'elastic',
@@ -114,8 +124,13 @@ class TestElastic(TestCase):
 
         self.assertIn('dateline', items_mapping)
         dateline_mapping = items_mapping['dateline']
-        self.assertIn('date', dateline_mapping['properties'])
-        self.assertEqual('date', dateline_mapping['properties']['date']['type'])
+        self.assertIn('created', dateline_mapping['properties'])
+        self.assertEqual('date', dateline_mapping['properties']['created']['type'])
+
+        self.assertIn('place', items_mapping)
+        place_mapping = items_mapping['place']
+        self.assertIn('created', place_mapping['properties'])
+        self.assertEqual('date', place_mapping['properties']['created']['type'])
 
     def test_dates_are_parsed_on_fetch(self):
         with self.app.app_context():
