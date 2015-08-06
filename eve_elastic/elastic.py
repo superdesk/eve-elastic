@@ -159,23 +159,36 @@ class Elastic(DataLayer):
             return self._datasource(resource)
         return self.datasource(resource)
 
+    def _get_mapping(self, schema):
+        """Get mapping for given resource or item schema.
+
+        :param schema: resource or dict/list type item schema
+        """
+        properties = {}
+        for field, field_schema in schema.items():
+            field_mapping = self._get_field_mapping(field_schema)
+            if field_mapping:
+                properties[field] = field_mapping
+        return {'properties': properties}
+
     def _get_field_mapping(self, schema):
-        """Get mapping for given field schema."""
+        """Get mapping for single field schema.
+
+        :param schema: field schema
+        """
         if 'mapping' in schema:
             return schema['mapping']
         elif schema['type'] == 'dict' and 'schema' in schema:
-            properties = {}
-            for k, v in schema['schema'].items():
-                field_mapping = self._get_field_mapping(v)
-                if field_mapping is not None:
-                    properties[k] = field_mapping
-            return {'properties': properties} if properties else None
+            return self._get_mapping(schema['schema'])
+        elif schema['type'] == 'list' and 'schema' in schema.get('schema', {}):
+            return self._get_mapping(schema['schema']['schema'])
         elif schema['type'] == 'datetime':
             return {'type': 'date'}
         elif schema['type'] == 'string' and schema.get('unique'):
             return {'type': 'string', 'index': 'not_analyzed'}
 
     def create_index(self, index=None):
+        """Create new index and ignore if it exists already."""
         if index is None:
             index = self.index
         try:
@@ -200,17 +213,13 @@ class Elastic(DataLayer):
             if datasource.get('source', resource) != resource:  # only put mapping for core types
                 continue
 
-            properties = {}
-            properties[config.DATE_CREATED] = self._get_field_mapping({'type': 'datetime'})
-            properties[config.LAST_UPDATED] = self._get_field_mapping({'type': 'datetime'})
+            properties = self._get_mapping(resource_config['schema'])
+            properties['properties'].update({
+                config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
+                config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
+            })
 
-            for field, schema in resource_config['schema'].items():
-                field_mapping = self._get_field_mapping(schema)
-                if field_mapping:
-                    properties[field] = field_mapping
-
-            mapping = {'properties': properties}
-            indices.put_mapping(index=index or self.index, doc_type=resource, body=mapping, ignore_conflicts=True)
+            indices.put_mapping(index=index or self.index, doc_type=resource, body=properties, ignore_conflicts=True)
 
     def find(self, resource, req, sub_resource_lookup):
         args = getattr(req, 'args', request.args if request else {}) or {}
