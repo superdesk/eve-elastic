@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.17 (2015-08-11)
++++++++++++++++++++
+
+- add support for phase search via `q` param (by Mugur Rus)
+
 0.2.16 (2015-08-04)
 +++++++++++++++++++
 
