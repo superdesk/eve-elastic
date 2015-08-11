@@ -356,6 +356,23 @@ class TestElastic(TestCase):
             cursor = self.app.data.find('items', req, None)
             self.assertEquals(1, cursor.count())
 
+    def test_phrase_search_query(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [
+                {'uri': 'foo bar'},
+                {'uri': 'some text'}
+            ])
+
+        with self.app.test_request_context('/items/?q="foo bar"'):
+            req = parse_request('items')
+            cursor = self.app.data.find('items', req, None)
+            self.assertEquals(1, cursor.count())
+
+        with self.app.test_request_context('/items/?q="bar foo"'):
+            req = parse_request('items')
+            cursor = self.app.data.find('items', req, None)
+            self.assertEquals(0, cursor.count())
+
     def test_elastic_filter_callback(self):
         with self.app.app_context():
             self.app.data.insert('items_with_callback_filter', [

@@ -58,6 +58,11 @@ def is_elastic(datasource):
     return datasource.get('backend') == 'elastic' or datasource.get('search_backend') == 'elastic'
 
 
+class InvalidSearchString(Exception):
+    '''Exception thrown when search string has invalid value'''
+    pass
+
+
 class ElasticJSONSerializer(elasticsearch.JSONSerializer):
     """Customize the JSON serializer used in Elastic."""
     pass
@@ -273,6 +278,8 @@ class Elastic(DataLayer):
         except elasticsearch.exceptions.RequestError as e:
             if e.status_code == 400 and "No mapping found for" in e.error:
                 hits = {}
+            elif e.status_code == 400 and 'SearchParseException' in e.error:
+                raise InvalidSearchString
             else:
                 raise
         return self._parse_hits(hits, resource)
