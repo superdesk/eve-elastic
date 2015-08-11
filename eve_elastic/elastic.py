@@ -467,8 +467,17 @@ def _build_query_string(q, default_field=None, default_operator='AND'):
     :param: default_field
     :return: dictionary object.
     """
+    def _is_phrase_search(query_string):
+        clean_query = query_string.strip()
+        return clean_query and clean_query.startswith('"') and clean_query.endswith('"')
 
-    query_string = {'query_string': {'query': q, 'default_operator': default_operator}}
-    query_string['query_string'].update({'lenient': False} if default_field else {'default_field': default_field})
+    def _get_phrase(query_string):
+        return query_string.strip().strip('"')
 
-    return query_string
+    if _is_phrase_search(q):
+        query = {'match_phrase': {'_all': _get_phrase(q)}}
+    else:
+        query = {'query_string': {'query': q, 'default_operator': default_operator}}
+        query['query_string'].update({'lenient': False} if default_field else {'default_field': default_field})
+
+    return query
