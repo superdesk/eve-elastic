@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.18 (2015-08-12)
++++++++++++++++++++
+
+- throw `InvalidSearchString` exception in case elastic returns `SearchParseException` (by Mugur Rus)
+
 0.2.17 (2015-08-11)
 +++++++++++++++++++
 
