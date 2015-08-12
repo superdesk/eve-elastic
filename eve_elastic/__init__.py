@@ -3,5 +3,5 @@
 __version__ = '0.1.6'
 
 # flake8: noqa
-from .elastic import Elastic, ElasticJSONSerializer, get_es, get_indices
+from .elastic import Elastic, ElasticJSONSerializer, get_es, get_indices, InvalidSearchString
 from .validation import Validator
