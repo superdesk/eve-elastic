@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.19 (2015-09-29)
++++++++++++++++++++
+
+- use `ELASTICSEARCH_URL` value as is so that it works with auth and https
+
 0.2.18 (2015-08-12)
 +++++++++++++++++++
 

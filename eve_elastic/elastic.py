@@ -9,11 +9,6 @@ from flask import request
 from eve.utils import config
 from eve.io.base import DataLayer
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
-
 
 def parse_date(date_str):
     """Parse elastic datetime string."""
@@ -127,8 +122,7 @@ def get_es(url, **kwargs):
 
     :param url: elasticsearch url
     """
-    o = urlparse(url)
-    es = elasticsearch.Elasticsearch([{'host': o.hostname, 'port': o.port}], **kwargs)
+    es = elasticsearch.Elasticsearch([url], **kwargs)
     return es
 
 
