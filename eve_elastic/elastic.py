@@ -395,13 +395,12 @@ class Elastic(DataLayer):
 
         index_exists = get_indices(self.es).exists(index)
 
-        if not index_exists:
-            raise elasticsearch.NotFoundError
-
         if index_exists:
             get_indices(self.es).close(index=index)
             get_indices(self.es).put_settings(index=index, body=settings)
             get_indices(self.es).open(index=index)
+        else:
+            self.create_index(index, settings)
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
