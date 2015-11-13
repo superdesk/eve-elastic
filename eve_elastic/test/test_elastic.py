@@ -4,9 +4,10 @@ import eve
 import elasticsearch
 from unittest import TestCase
 from datetime import datetime
+from copy import deepcopy
 from flask import json
 from eve.utils import config, ParsedRequest, parse_request
-from ..elastic import parse_date, Elastic
+from ..elastic import parse_date, Elastic, get_indices, get_es
 from nose.tools import raises
 
 
@@ -77,7 +78,22 @@ DOMAIN = {
             'backend': 'elastic',
             'elastic_filter_callback': lambda: {'term': {'uri': 'foo'}}
         }
-    },
+    }
+}
+
+
+ELASTICSEARCH_SETTINGS = {
+    'settings': {
+        'analysis': {
+            'analyzer': {
+                'phrase_prefix_analyzer': {
+                    'type': 'custom',
+                    'tokenizer': 'keyword',
+                    'filter': ['lowercase']
+                }
+            }
+        }
+    }
 }
 
 
@@ -91,6 +107,7 @@ class TestElastic(TestCase):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = INDEX
+        # settings['ELASTICSEARCH_SETTINGS'] = ELASTICSEARCH_SETTINGS
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
             for resource in self.app.config['DOMAIN']:
@@ -406,3 +423,91 @@ class TestElastic(TestCase):
             req.args = {}
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(0, cursor.count())
+
+
+class TestElasticSearchWithSettings(TestCase):
+    index_name = 'elastic_settings'
+
+    def setUp(self):
+        settings = {
+            'DOMAIN': {
+                'items': {
+                    'schema': {
+                        'slugline': {
+                            'type': 'string',
+                            'mapping': {
+                                'type': 'string',
+                                'fields': {
+                                    'phrase': {
+                                        'type': 'string',
+                                        'index_analyzer': 'phrase_prefix_analyzer',
+                                        'search_analyzer': 'phrase_prefix_analyzer'
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    'datasource': {
+                        'backend': 'elastic'
+                    }
+                }
+            },
+            'ELASTICSEARCH_URL': 'http://localhost:9200',
+            'ELASTICSEARCH_INDEX': self.index_name,
+            'ELASTICSEARCH_SETTINGS': ELASTICSEARCH_SETTINGS
+        }
+
+        self.app = eve.Eve(settings=settings, data=Elastic)
+        with self.app.app_context():
+            for resource in self.app.config['DOMAIN']:
+                self.app.data.remove(resource)
+
+            self.es = get_es(self.app.config.get('ELASTICSEARCH_URL'))
+
+    def tearDown(self):
+        with self.app.app_context():
+            get_indices(self.es).delete(self.index_name)
+
+    def test_elastic_settings(self):
+        with self.app.app_context():
+            settings = self.app.data.get_settings(self.index_name)
+            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            self.assertDictEqual({
+                'phrase_prefix_analyzer': {
+                    'tokenizer': 'keyword',
+                    'filter': ['lowercase'],
+                    'type': 'custom'
+                }
+            }, analyzer)
+
+    def test_put_settings(self):
+        with self.app.app_context():
+            settings = self.app.data.get_settings(self.index_name)
+            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            self.assertDictEqual({
+                'phrase_prefix_analyzer': {
+                    'tokenizer': 'keyword',
+                    'filter': ['lowercase'],
+                    'type': 'custom'
+                }
+            }, analyzer)
+
+            new_settings = deepcopy(ELASTICSEARCH_SETTINGS)
+
+            new_settings['settings']['analysis']['analyzer']['phrase_prefix_analyzer'] = {
+                'type': 'custom',
+                'tokenizer': 'whitespace',
+                'filter': ['uppercase']
+            }
+
+            self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
+            self.app.data.put_settings(self.app, self.index_name)
+            settings = self.app.data.get_settings(self.index_name)
+            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            self.assertDictEqual({
+                'phrase_prefix_analyzer': {
+                    'tokenizer': 'whitespace',
+                    'filter': ['uppercase'],
+                    'type': 'custom'
+                }
+            }, analyzer)
