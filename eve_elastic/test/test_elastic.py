@@ -107,7 +107,6 @@ class TestElastic(TestCase):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = INDEX
-        # settings['ELASTICSEARCH_SETTINGS'] = ELASTICSEARCH_SETTINGS
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
             for resource in self.app.config['DOMAIN']:
