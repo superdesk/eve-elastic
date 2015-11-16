@@ -205,8 +205,9 @@ class Elastic(DataLayer):
 
             get_indices(self.es).create(**args)
 
-        except elasticsearch.TransportError:
-            pass
+        except elasticsearch.TransportError:  # index exists
+            if settings:
+                self.put_settings(None, index, settings)
 
     def put_mapping(self, app, index=None):
         """Put mapping for elasticsearch for current schema.
@@ -383,9 +384,10 @@ class Elastic(DataLayer):
         res = self.es.count(body={'query': {'match_all': {}}}, **args)
         return res.get('count', 0) == 0
 
-    def put_settings(self, app, index=None):
+    def put_settings(self, app=None, index=None, settings=None):
         """Modify index settings"""
-        settings = app.config.get('ELASTICSEARCH_SETTINGS')
+        if not settings and app:
+            settings = app.config.get('ELASTICSEARCH_SETTINGS')
 
         if not settings:
             raise InvalidIndexSettings
