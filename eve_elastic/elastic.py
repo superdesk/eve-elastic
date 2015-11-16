@@ -58,6 +58,11 @@ class InvalidSearchString(Exception):
     pass
 
 
+class InvalidIndexSettings(Exception):
+    """Exception is thrown when put_settings is called without ELASTIC_SETTINGS"""
+    pass
+
+
 class ElasticJSONSerializer(elasticsearch.JSONSerializer):
     """Customize the JSON serializer used in Elastic."""
     pass
@@ -150,7 +155,7 @@ class Elastic(DataLayer):
         self.index = app.config['ELASTICSEARCH_INDEX']
         self.es = get_es(app.config['ELASTICSEARCH_URL'], **self.kwargs)
 
-        self.create_index(self.index)
+        self.create_index(self.index, app.config.get('ELASTICSEARCH_SETTINGS'))
         self.put_mapping(app)
 
     def get_datasource(self, resource):
@@ -186,12 +191,20 @@ class Elastic(DataLayer):
         elif schema['type'] == 'string' and schema.get('unique'):
             return {'type': 'string', 'index': 'not_analyzed'}
 
-    def create_index(self, index=None):
+    def create_index(self, index=None, settings=None):
         """Create new index and ignore if it exists already."""
         if index is None:
             index = self.index
         try:
-            get_indices(self.es).create(index)
+            args = {
+                'index': index
+            }
+
+            if settings:
+                args['body'] = settings
+
+            get_indices(self.es).create(**args)
+
         except elasticsearch.TransportError:
             pass
 
@@ -219,6 +232,12 @@ class Elastic(DataLayer):
             })
 
             indices.put_mapping(index=index or self.index, doc_type=resource, body=properties, ignore_conflicts=True)
+
+    def get_mapping(self, index, doc_type=None):
+        return get_indices(self.es).get_mapping(index=index, doc_type=doc_type)
+
+    def get_settings(self, index):
+        return get_indices(self.es).get_settings(index=index)
 
     def find(self, resource, req, sub_resource_lookup):
         args = getattr(req, 'args', request.args if request else {}) or {}
@@ -364,8 +383,24 @@ class Elastic(DataLayer):
         res = self.es.count(body={'query': {'match_all': {}}}, **args)
         return res.get('count', 0) == 0
 
-    def get_mapping(self, index, doc_type=None):
-        return get_indices(self.es).get_mapping(index=index, doc_type=doc_type)
+    def put_settings(self, app, index=None):
+        """Modify index settings"""
+        settings = app.config.get('ELASTICSEARCH_SETTINGS')
+
+        if not settings:
+            raise InvalidIndexSettings
+
+        if not index:
+            index = self.index
+
+        index_exists = get_indices(self.es).exists(index)
+
+        if index_exists:
+            get_indices(self.es).close(index=index)
+            get_indices(self.es).put_settings(index=index, body=settings)
+            get_indices(self.es).open(index=index)
+        else:
+            self.create_index(index, settings)
 
     def _parse_hits(self, hits, resource):
         """Parse hits response into documents."""
