@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.20 (2015-11-16)
++++++++++++++++++++
+
+- make it possible to specify index settings (by Mayur Dhamanwala)
+
 0.2.19 (2015-09-29)
 +++++++++++++++++++
 
