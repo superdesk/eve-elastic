@@ -536,6 +536,9 @@ class TestElasticSearchWithSettings(TestCase):
 
             self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
 
-            with self.assertLogs('elastic') as log:
+            if hasattr(self, 'assertLogs'):
+                with self.assertLogs('elastic') as log:
+                    self.app.data.put_mapping(self.app)
+                    self.assertEqual(log.output, ['WARNING:elastic:mapping error, updating settings resource=items'])
+            else:
                 self.app.data.put_mapping(self.app)
-                self.assertEqual(log.output, ['WARNING:elastic:mapping error, updating settings resource=items'])
