@@ -510,3 +510,32 @@ class TestElasticSearchWithSettings(TestCase):
                     'type': 'custom'
                 }
             }, analyzer)
+
+    def test_put_settings_existing_index(self):
+        with self.app.app_context():
+            self.app.config['DOMAIN']['items']['schema']['slugline'] = {
+                'type': 'string',
+                'mapping': {
+                    'type': 'string',
+                    'fields': {
+                        'phrases': {
+                            'type': 'string',
+                            'index_analyzer': 'prefix_analyzer',
+                            'search_analyzer': 'prefix_analyzer'
+                        }
+                    }
+                }
+            }
+
+            new_settings = deepcopy(ELASTICSEARCH_SETTINGS)
+            new_settings['settings']['analysis']['analyzer']['prefix_analyzer'] = {
+                'type': 'custom',
+                'tokenizer': 'whitespace',
+                'filter': ['uppercase']
+            }
+
+            self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
+
+            with self.assertLogs('elastic') as log:
+                self.app.data.put_mapping(self.app)
+                self.assertEqual(log.output, ['WARNING:elastic:mapping error, updating settings resource=items'])

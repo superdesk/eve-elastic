@@ -3,11 +3,16 @@ import ast
 import json
 import arrow
 import elasticsearch
+import logging
+
 from elasticsearch.helpers import bulk
 
 from flask import request
 from eve.utils import config
 from eve.io.base import DataLayer
+
+
+logger = logging.getLogger('elastic')
 
 
 def parse_date(date_str):
@@ -206,8 +211,7 @@ class Elastic(DataLayer):
             get_indices(self.es).create(**args)
 
         except elasticsearch.TransportError:  # index exists
-            if settings:
-                self.put_settings(None, index, settings)
+            pass
 
     def put_mapping(self, app, index=None):
         """Put mapping for elasticsearch for current schema.
@@ -232,7 +236,19 @@ class Elastic(DataLayer):
                 config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
             })
 
-            indices.put_mapping(index=index or self.index, doc_type=resource, body=properties, ignore_conflicts=True)
+            kwargs = {
+                'index': index or self.index,
+                'doc_type': resource,
+                'body': properties,
+                'ignore_conflicts': True,
+            }
+
+            try:
+                indices.put_mapping(**kwargs)
+            except elasticsearch.exceptions.RequestError:
+                logger.warning('mapping error, updating settings resource=%s' % resource)
+                self.put_settings(app, index)
+                indices.put_mapping(**kwargs)
 
     def get_mapping(self, index, doc_type=None):
         return get_indices(self.es).get_mapping(index=index, doc_type=doc_type)
