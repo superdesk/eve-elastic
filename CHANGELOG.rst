@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.2.21 (2015-11-20)
++++++++++++++++++++
+
+- try to put settings in case put mapping is failing
+
 0.2.20 (2015-11-16)
 +++++++++++++++++++
 
