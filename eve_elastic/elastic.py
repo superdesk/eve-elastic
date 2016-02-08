@@ -2,12 +2,12 @@
 import ast
 import json
 import arrow
-import elasticsearch
 import logging
+import elasticsearch
 
 from elasticsearch.helpers import bulk
 
-from flask import request
+from flask import request, current_app
 from eve.utils import config
 from eve.io.base import DataLayer
 
@@ -156,12 +156,16 @@ class Elastic(DataLayer):
     def init_app(self, app):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
+        app.config.setdefault('ELASTICSEARCH_INDEXES', {})
 
         self.index = app.config['ELASTICSEARCH_INDEX']
         self.es = get_es(app.config['ELASTICSEARCH_URL'], **self.kwargs)
 
-        self.create_index(self.index, app.config.get('ELASTICSEARCH_SETTINGS'))
-        self.put_mapping(app)
+        indexes = list(app.config['ELASTICSEARCH_INDEXES'].values()) + [self.index]
+        for index in indexes:
+            if not self.es.indices.exists(index):
+                self.create_index(index, app.config.get('ELASTICSEARCH_SETTINGS'))
+                self.put_mapping(app, index)
 
     def get_datasource(self, resource):
         if hasattr(self, '_datasource'):
@@ -201,9 +205,7 @@ class Elastic(DataLayer):
         if index is None:
             index = self.index
         try:
-            args = {
-                'index': index
-            }
+            args = {'index': index}
 
             if settings:
                 args['body'] = settings
@@ -364,13 +366,13 @@ class Elastic(DataLayer):
         for doc in doc_or_docs:
             res = self.es.index(body=doc, id=doc.get('_id'), **kwargs)
             ids.append(res.get('_id', doc.get('_id')))
-        get_indices(self.es).refresh(self.index)
+        self._refresh_resource_index(resource)
         return ids
 
     def bulk_insert(self, resource, docs, **kwargs):
         kwargs.update(self._es_args(resource))
         res = bulk(self.es, docs, stats_only=False, **kwargs)
-        get_indices(self.es).refresh(self.index)
+        self._refresh_resource_index(resource)
         return res
 
     def update(self, resource, id_, updates):
@@ -436,9 +438,9 @@ class Elastic(DataLayer):
         """Get index and doctype args."""
         datasource = self.get_datasource(resource)
         args = {
-            'index': self.index,
+            'index': self._resource_index(resource),
             'doc_type': datasource[0],
-            }
+        }
         if refresh:
             args['refresh'] = refresh
         return args
@@ -452,6 +454,22 @@ class Elastic(DataLayer):
     def _default_sort(self, resource):
         datasource = self.get_datasource(resource)
         return datasource[3]
+
+    def _resource_index(self, resource):
+        """Get index for given resource.
+
+        by default it will be `self.index`, but it can be overriden via app.config
+
+        :param resource: resource name
+        """
+        return current_app.config['ELASTICSEARCH_INDEXES'].get(resource, self.index)
+
+    def _refresh_resource_index(self, resource):
+        """Refresh index for given resource.
+
+        :param resource: resource name
+        """
+        return get_indices(self.es).refresh(self._resource_index(resource))
 
 
 def build_elastic_query(doc):

@@ -55,6 +55,10 @@ DOMAIN = {
             'source': 'items',
         },
     },
+    'archived_items': {
+        'schema': {'name': {'type': 'text'}, 'archived': {'type': 'datetime'}},
+        'datasource': {'backend': 'elastic'},
+    },
     'items_with_description': {
         'schema': {
             'uri': {'type': 'string', 'unique': True},
@@ -107,10 +111,9 @@ class TestElastic(TestCase):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = INDEX
+        self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
+        self.es.indices.delete(INDEX)
         self.app = eve.Eve(settings=settings, data=Elastic)
-        with self.app.app_context():
-            for resource in self.app.config['DOMAIN']:
-                self.app.data.remove(resource)
 
     def test_parse_date(self):
         date = parse_date('2013-11-06T07:56:01.414944+00:00')
@@ -422,6 +425,41 @@ class TestElastic(TestCase):
             req.args = {}
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(0, cursor.count())
+
+    def test_custom_index_settings_per_resource(self):
+        with self.app.app_context():
+            self.assertIn('archived_items', self.app.config['SOURCES'])
+
+        archived_index = 'elastic_test_archived'
+        archived_type = 'archived_items'
+
+        with self.app.app_context():
+            self.app.config['ELASTICSEARCH_INDEXES'] = {archived_type: archived_index}
+            self.assertIn(archived_type, self.app.config['SOURCES'])
+
+        try:
+            self.es.indices.delete(archived_index)
+        except elasticsearch.exceptions.NotFoundError:
+            pass
+
+        self.assertFalse(self.es.indices.exists(archived_index))
+
+        self.app.data = Elastic(self.app)
+        self.app.data.init_app(self.app)
+
+        self.assertTrue(self.es.indices.exists(archived_index))
+        self.assertEqual(0, self.es.count(archived_index, archived_type)['count'])
+
+        with self.app.app_context():
+            self.app.data.insert(archived_type, [
+                {'name': 'foo', 'archived': '2013-01-01T11:12:13+0000'},
+            ])
+
+        self.assertEqual(1, self.es.count(archived_index, archived_type)['count'])
+
+        with self.app.app_context():
+            item = self.app.data.find_one(archived_type, req=None, name='foo')
+            self.assertEqual('foo', item['name'])
 
 
 class TestElasticSearchWithSettings(TestCase):
