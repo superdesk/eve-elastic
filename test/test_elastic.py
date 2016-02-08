@@ -7,7 +7,7 @@ from datetime import datetime
 from copy import deepcopy
 from flask import json
 from eve.utils import config, ParsedRequest, parse_request
-from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es
+from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es, generate_index_name
 from nose.tools import raises
 
 
@@ -107,12 +107,18 @@ DOC_TYPE = 'items'
 
 class TestElastic(TestCase):
 
+    def drop_index(self, index):
+        try:
+            self.es.indices.delete(index)
+        except elasticsearch.exceptions.NotFoundError:
+            pass
+
     def setUp(self):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = INDEX
         self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
-        self.es.indices.delete(INDEX)
+        self.drop_index(INDEX)
         self.app = eve.Eve(settings=settings, data=Elastic)
 
     def test_parse_date(self):
@@ -124,12 +130,15 @@ class TestElastic(TestCase):
         date = parse_date(None)
         self.assertIsNone(date)
 
+    def test_generate_index_name(self):
+        self.assertNotEqual(generate_index_name('a'), generate_index_name('a'))
+
     def test_put_mapping(self):
         elastic = Elastic(None)
         elastic.init_app(self.app)
         elastic.put_mapping(self.app)
 
-        mapping = elastic.get_mapping(elastic.index)[elastic.index]
+        mapping = elastic.get_mapping(elastic.index)
         items_mapping = mapping['mappings']['items']['properties']
 
         self.assertIn('firstcreated', items_mapping)
@@ -427,20 +436,14 @@ class TestElastic(TestCase):
             self.assertEqual(0, cursor.count())
 
     def test_custom_index_settings_per_resource(self):
-        with self.app.app_context():
-            self.assertIn('archived_items', self.app.config['SOURCES'])
-
         archived_index = 'elastic_test_archived'
         archived_type = 'archived_items'
+
+        self.drop_index(archived_index)
 
         with self.app.app_context():
             self.app.config['ELASTICSEARCH_INDEXES'] = {archived_type: archived_index}
             self.assertIn(archived_type, self.app.config['SOURCES'])
-
-        try:
-            self.es.indices.delete(archived_index)
-        except elasticsearch.exceptions.NotFoundError:
-            pass
 
         self.assertFalse(self.es.indices.exists(archived_index))
 
@@ -508,7 +511,7 @@ class TestElasticSearchWithSettings(TestCase):
     def test_elastic_settings(self):
         with self.app.app_context():
             settings = self.app.data.get_settings(self.index_name)
-            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
                     'tokenizer': 'keyword',
@@ -520,7 +523,7 @@ class TestElasticSearchWithSettings(TestCase):
     def test_put_settings(self):
         with self.app.app_context():
             settings = self.app.data.get_settings(self.index_name)
-            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
                     'tokenizer': 'keyword',
@@ -540,7 +543,7 @@ class TestElasticSearchWithSettings(TestCase):
             self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
             self.app.data.put_settings(self.app, self.index_name)
             settings = self.app.data.get_settings(self.index_name)
-            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
                     'tokenizer': 'whitespace',

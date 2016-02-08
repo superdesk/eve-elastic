@@ -10,6 +10,7 @@ from elasticsearch.helpers import bulk
 from flask import request, current_app
 from eve.utils import config
 from eve.io.base import DataLayer
+from uuid import uuid4
 
 
 logger = logging.getLogger('elastic')
@@ -56,6 +57,11 @@ def noop():
 def is_elastic(datasource):
     """Detect if given resource uses elastic."""
     return datasource.get('backend') == 'elastic' or datasource.get('search_backend') == 'elastic'
+
+
+def generate_index_name(alias):
+    random = str(uuid4()).split('-')[0]
+    return '{}_{}'.format(alias, random)
 
 
 class InvalidSearchString(Exception):
@@ -205,13 +211,16 @@ class Elastic(DataLayer):
         if index is None:
             index = self.index
         try:
-            args = {'index': index}
+            alias = index
+            index = generate_index_name(alias)
 
+            args = {'index': index}
             if settings:
                 args['body'] = settings
 
-            get_indices(self.es).create(**args)
-
+            self.es.indices.create(**args)
+            self.es.indices.put_alias(index, alias)
+            logger.info('created index alias=%s index=%s' % (alias, index))
         except elasticsearch.TransportError:  # index exists
             pass
 
@@ -220,8 +229,6 @@ class Elastic(DataLayer):
 
         It's not called automatically now, but rather left for user to call it whenever it makes sense.
         """
-
-        indices = get_indices(self.es)
 
         for resource, resource_config in app.config['DOMAIN'].items():
             datasource = resource_config.get('datasource', {})
@@ -246,17 +253,40 @@ class Elastic(DataLayer):
             }
 
             try:
-                indices.put_mapping(**kwargs)
+                self.es.indices.put_mapping(**kwargs)
             except elasticsearch.exceptions.RequestError:
                 logger.warning('mapping error, updating settings resource=%s' % resource)
                 self.put_settings(app, index)
-                indices.put_mapping(**kwargs)
+                self.es.indices.put_mapping(**kwargs)
 
     def get_mapping(self, index, doc_type=None):
-        return get_indices(self.es).get_mapping(index=index, doc_type=doc_type)
+        """Get mapping for index.
+
+        :param index: index name
+        """
+        mapping = self.es.indices.get_mapping(index=index, doc_type=doc_type)
+        return next(iter(mapping.values()))
 
     def get_settings(self, index):
-        return get_indices(self.es).get_settings(index=index)
+        """Get settings for index.
+
+        :param index: index name
+        """
+        settings = self.es.indices.get_settings(index=index)
+        return next(iter(settings.values()))
+
+    def get_index_by_alias(self, alias):
+        """Get index name for given alias.
+
+        If there is no alias assume it's an index.
+
+        :param alias: alias name
+        """
+        try:
+            info = self.es.indices.get_alias(name=alias)
+            return next(iter(info.keys()))
+        except elasticsearch.exceptions.NotFoundError:
+            return alias
 
     def find(self, resource, req, sub_resource_lookup):
         args = getattr(req, 'args', request.args if request else {}) or {}
@@ -416,9 +446,9 @@ class Elastic(DataLayer):
         index_exists = get_indices(self.es).exists(index)
 
         if index_exists:
-            get_indices(self.es).close(index=index)
-            get_indices(self.es).put_settings(index=index, body=settings)
-            get_indices(self.es).open(index=index)
+            self.es.indices.close(index=index)
+            self.es.indices.put_settings(index=index, body=settings)
+            self.es.indices.open(index=index)
         else:
             self.create_index(index, settings)
 
