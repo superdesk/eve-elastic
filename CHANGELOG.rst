@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.3.0 (2016-02-08)
+++++++++++++++++++
+
+- introduce `ELASTICSEARCH_INDEXES` settings for setting different index per resource
+
 0.2.21 (2015-11-20)
 +++++++++++++++++++
 
