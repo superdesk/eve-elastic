@@ -7,7 +7,7 @@ from datetime import datetime
 from copy import deepcopy
 from flask import json
 from eve.utils import config, ParsedRequest, parse_request
-from ..elastic import parse_date, Elastic, get_indices, get_es
+from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es, generate_index_name
 from nose.tools import raises
 
 
@@ -54,6 +54,10 @@ DOMAIN = {
             'backend': 'elastic',
             'source': 'items',
         },
+    },
+    'archived_items': {
+        'schema': {'name': {'type': 'text'}, 'archived': {'type': 'datetime'}},
+        'datasource': {'backend': 'elastic'},
     },
     'items_with_description': {
         'schema': {
@@ -103,14 +107,19 @@ DOC_TYPE = 'items'
 
 class TestElastic(TestCase):
 
+    def drop_index(self, index):
+        try:
+            self.es.indices.delete(index)
+        except elasticsearch.exceptions.NotFoundError:
+            pass
+
     def setUp(self):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = INDEX
+        self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
+        self.drop_index(INDEX)
         self.app = eve.Eve(settings=settings, data=Elastic)
-        with self.app.app_context():
-            for resource in self.app.config['DOMAIN']:
-                self.app.data.remove(resource)
 
     def test_parse_date(self):
         date = parse_date('2013-11-06T07:56:01.414944+00:00')
@@ -121,12 +130,15 @@ class TestElastic(TestCase):
         date = parse_date(None)
         self.assertIsNone(date)
 
+    def test_generate_index_name(self):
+        self.assertNotEqual(generate_index_name('a'), generate_index_name('a'))
+
     def test_put_mapping(self):
         elastic = Elastic(None)
         elastic.init_app(self.app)
         elastic.put_mapping(self.app)
 
-        mapping = elastic.get_mapping(elastic.index)[elastic.index]
+        mapping = elastic.get_mapping(elastic.index)
         items_mapping = mapping['mappings']['items']['properties']
 
         self.assertIn('firstcreated', items_mapping)
@@ -423,6 +435,35 @@ class TestElastic(TestCase):
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(0, cursor.count())
 
+    def test_custom_index_settings_per_resource(self):
+        archived_index = 'elastic_test_archived'
+        archived_type = 'archived_items'
+
+        self.drop_index(archived_index)
+
+        with self.app.app_context():
+            self.app.config['ELASTICSEARCH_INDEXES'] = {archived_type: archived_index}
+            self.assertIn(archived_type, self.app.config['SOURCES'])
+
+        self.assertFalse(self.es.indices.exists(archived_index))
+
+        self.app.data = Elastic(self.app)
+        self.app.data.init_app(self.app)
+
+        self.assertTrue(self.es.indices.exists(archived_index))
+        self.assertEqual(0, self.es.count(archived_index, archived_type)['count'])
+
+        with self.app.app_context():
+            self.app.data.insert(archived_type, [
+                {'name': 'foo', 'archived': '2013-01-01T11:12:13+0000'},
+            ])
+
+        self.assertEqual(1, self.es.count(archived_index, archived_type)['count'])
+
+        with self.app.app_context():
+            item = self.app.data.find_one(archived_type, req=None, name='foo')
+            self.assertEqual('foo', item['name'])
+
 
 class TestElasticSearchWithSettings(TestCase):
     index_name = 'elastic_settings'
@@ -470,7 +511,7 @@ class TestElasticSearchWithSettings(TestCase):
     def test_elastic_settings(self):
         with self.app.app_context():
             settings = self.app.data.get_settings(self.index_name)
-            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
                     'tokenizer': 'keyword',
@@ -482,7 +523,7 @@ class TestElasticSearchWithSettings(TestCase):
     def test_put_settings(self):
         with self.app.app_context():
             settings = self.app.data.get_settings(self.index_name)
-            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
                     'tokenizer': 'keyword',
@@ -502,7 +543,7 @@ class TestElasticSearchWithSettings(TestCase):
             self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
             self.app.data.put_settings(self.app, self.index_name)
             settings = self.app.data.get_settings(self.index_name)
-            analyzer = settings[self.index_name]['settings']['index']['analysis']['analyzer']
+            analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
                     'tokenizer': 'whitespace',
