@@ -7,7 +7,7 @@ from datetime import datetime
 from copy import deepcopy
 from flask import json
 from eve.utils import config, ParsedRequest, parse_request
-from ..elastic import parse_date, Elastic, get_indices, get_es
+from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es
 from nose.tools import raises
 
 

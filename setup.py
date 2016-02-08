@@ -21,7 +21,7 @@ setup(
     author_email='petr.jasek@sourcefabric.org',
     url='https://github.com/petrjasek/eve-elastic',
     packages=['eve_elastic'],
-    test_suite='eve_elastic.test.test_elastic',
+    test_suite='test.test_elastic',
     tests_require=['nose'],
     install_requires=[
         'arrow>=0.4.2',
