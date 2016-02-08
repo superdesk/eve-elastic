@@ -6,7 +6,9 @@ python:
     - "3.4"
     - "3.5"
 
-install: pip install flake8 nose
+install:
+    - pip install flake8 nose
+    - pip install .
 
 script:
     - nosetests
