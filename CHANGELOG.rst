@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.3.2 (2016-02-11)
+++++++++++++++++++
+
+- introduce `ELASTICSEARCH_AUTO_AGGREGATIONS` config option
+
 0.3.1 (2016-02-11)
 ++++++++++++++++++
 
