@@ -164,6 +164,7 @@ class Elastic(DataLayer):
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
         app.config.setdefault('ELASTICSEARCH_INDEXES', {})
         app.config.setdefault('ELASTICSEARCH_FORCE_REFRESH', True)
+        app.config.setdefault('ELASTICSEARCH_AUTO_AGGREGATIONS', True)
 
         self.index = app.config['ELASTICSEARCH_INDEX']
         self.es = get_es(app.config['ELASTICSEARCH_URL'], **self.kwargs)
@@ -332,7 +333,7 @@ class Elastic(DataLayer):
         if 'facets' in source_config:
             query['facets'] = source_config['facets']
 
-        if 'aggregations' in source_config:
+        if 'aggregations' in source_config and self.should_aggregate(req):
             query['aggs'] = source_config['aggregations']
 
         args = self._es_args(resource)
@@ -346,6 +347,9 @@ class Elastic(DataLayer):
             else:
                 raise
         return self._parse_hits(hits, resource)
+
+    def should_aggregate(self, req):
+        return current_app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or req.args.get('aggregations')
 
     def find_one(self, resource, req, **lookup):
 
