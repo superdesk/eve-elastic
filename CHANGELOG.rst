@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+0.3.1 (2016-02-11)
+++++++++++++++++++
+
+- introduce `ELASTICSEARCH_FORCE_REFRESH` settings that is `True` by default
+- fix for `ELASTICSEARCH_INDEXES` when using `datasource.source` config
+
 0.3.0 (2016-02-08)
 ++++++++++++++++++
 
