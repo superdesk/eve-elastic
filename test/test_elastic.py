@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import eve
+import time
 import elasticsearch
 from unittest import TestCase
 from datetime import datetime
@@ -51,7 +52,6 @@ DOMAIN = {
             'published': {'type': 'datetime'}
         },
         'datasource': {
-            'backend': 'elastic',
             'source': 'items',
         },
     },
@@ -139,6 +139,8 @@ class TestElastic(TestCase):
         elastic.put_mapping(self.app)
 
         mapping = elastic.get_mapping(elastic.index)
+        self.assertNotIn('published_items', mapping['mappings'])
+
         items_mapping = mapping['mappings']['items']['properties']
 
         self.assertIn('firstcreated', items_mapping)
@@ -463,6 +465,22 @@ class TestElastic(TestCase):
         with self.app.app_context():
             item = self.app.data.find_one(archived_type, req=None, name='foo')
             self.assertEqual('foo', item['name'])
+
+    def test_no_force_refresh(self):
+        with self.app.app_context():
+            self.app.config['ELASTICSEARCH_FORCE_REFRESH'] = False
+            ids = self.app.data.insert('items', [
+                {'uri': 'foo', 'name': 'foo'},
+                {'uri': 'bar', 'name': 'bar'},
+            ])
+
+            item = self.app.data.find_one('items', req=None, _id=ids[0])
+            self.assertEqual('foo', item['uri'])
+
+            time.sleep(2)
+            req = ParsedRequest()
+            cursor = self.app.data.find('items', req, None)
+            self.assertEqual(2, cursor.count())
 
 
 class TestElasticSearchWithSettings(TestCase):

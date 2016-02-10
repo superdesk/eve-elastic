@@ -163,6 +163,7 @@ class Elastic(DataLayer):
         app.config.setdefault('ELASTICSEARCH_URL', 'http://localhost:9200/')
         app.config.setdefault('ELASTICSEARCH_INDEX', 'eve')
         app.config.setdefault('ELASTICSEARCH_INDEXES', {})
+        app.config.setdefault('ELASTICSEARCH_FORCE_REFRESH', True)
 
         self.index = app.config['ELASTICSEARCH_INDEX']
         self.es = get_es(app.config['ELASTICSEARCH_URL'], **self.kwargs)
@@ -468,7 +469,7 @@ class Elastic(DataLayer):
         """Get index and doctype args."""
         datasource = self.get_datasource(resource)
         args = {
-            'index': self._resource_index(resource),
+            'index': self._resource_index(datasource[0]),
             'doc_type': datasource[0],
         }
         if refresh:
@@ -499,7 +500,9 @@ class Elastic(DataLayer):
 
         :param resource: resource name
         """
-        return get_indices(self.es).refresh(self._resource_index(resource))
+        if current_app.config.get('ELASTICSEARCH_FORCE_REFRESH'):
+            datasource = self.get_datasource(resource)
+            get_indices(self.es).refresh(self._resource_index(datasource[0]))
 
 
 def build_elastic_query(doc):
