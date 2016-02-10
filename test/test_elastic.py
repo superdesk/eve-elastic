@@ -328,6 +328,22 @@ class TestElastic(TestCase):
             self.assertEqual(1, item2.count())
             self.assertEqual(3, response['_aggregations']['type']['buckets'][0]['doc_count'])
 
+    def test_resource_aggregates_no_auto(self):
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo'}])
+            self.app.config['ELASTICSEARCH_AUTO_AGGREGATIONS'] = False
+            req = ParsedRequest()
+            req.args = {}
+            response = {}
+            cursor = self.app.data.find('items_with_description', req, {})
+            cursor.extra(response)
+            self.assertNotIn('_aggregations', response)
+
+            req.args = {'aggregations': 1}
+            cursor = self.app.data.find('items_with_description', req, {})
+            cursor.extra(response)
+            self.assertIn('_aggregations', response)
+
     def test_put(self):
         with self.app.app_context():
             self.app.data.replace('items', 'newid', {'uri': 'foo', '_id': 'newid', '_type': 'x'})
