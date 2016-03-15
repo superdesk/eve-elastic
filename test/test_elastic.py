@@ -120,6 +120,7 @@ class TestElastic(TestCase):
         self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
         self.drop_index(INDEX)
         self.app = eve.Eve(settings=settings, data=Elastic)
+        self.app.data.init_index(self.app)
 
     def test_parse_date(self):
         date = parse_date('2013-11-06T07:56:01.414944+00:00')
@@ -310,7 +311,8 @@ class TestElastic(TestCase):
     def test_it_can_use_configured_url(self):
         with self.app.app_context():
             self.app.config['ELASTICSEARCH_URL'] = 'http://localhost:9292'
-            Elastic(self.app)
+            elastic = Elastic(self.app)
+            elastic.init_index(self.app)
 
     def test_resource_aggregates(self):
         with self.app.app_context():
@@ -467,6 +469,7 @@ class TestElastic(TestCase):
 
         self.app.data = Elastic(self.app)
         self.app.data.init_app(self.app)
+        self.app.data.init_index(self.app)
 
         self.assertTrue(self.es.indices.exists(archived_index))
         self.assertEqual(0, self.es.count(archived_index, archived_type)['count'])
@@ -532,6 +535,7 @@ class TestElasticSearchWithSettings(TestCase):
         }
 
         self.app = eve.Eve(settings=settings, data=Elastic)
+        self.app.data.init_index(self.app)
         with self.app.app_context():
             for resource in self.app.config['DOMAIN']:
                 self.app.data.remove(resource)
