@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.3.3 (2016-03-15)
+++++++++++++++++++
+
+- introduce `init_index` method to create index and put mapping
+
 0.3.2 (2016-02-11)
 ++++++++++++++++++
 
