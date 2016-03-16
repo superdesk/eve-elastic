@@ -176,7 +176,8 @@ class Elastic(DataLayer):
         for index in indexes:
             if not self.es.indices.exists(index):
                 self.create_index(index, app.config.get('ELASTICSEARCH_SETTINGS'))
-                self.put_mapping(app, index)
+
+            self.put_mapping(app, index)
 
     def get_datasource(self, resource):
         if hasattr(self, '_datasource'):
