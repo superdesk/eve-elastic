@@ -168,7 +168,9 @@ class Elastic(DataLayer):
 
         self.index = app.config['ELASTICSEARCH_INDEX']
         self.es = get_es(app.config['ELASTICSEARCH_URL'], **self.kwargs)
-        self.init_index(app)
+
+        if not self.kwargs.get('skip_index_init'):
+            self.init_index(app)
 
     def init_index(self, app):
         """Create indexes and put mapping."""
