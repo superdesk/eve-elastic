@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.3.4 (2016-03-17)
+++++++++++++++++++
+
+- make `init_index` put mapping always, no matter if index is there already
+
 0.3.3 (2016-03-15)
 ++++++++++++++++++
 
