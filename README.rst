@@ -36,6 +36,7 @@ Set elastic as your eve data layer.
     from eve_elastic import Elastic
 
     app = eve.Eve(data=Elastic)
+    app.run()
 
 Config
 ------
