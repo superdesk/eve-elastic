@@ -378,11 +378,11 @@ class Elastic(DataLayer):
             docs = self._parse_hits({'hits': {'hits': [hit]}}, resource)
             return docs.first()
         else:
-            query = {
-                'query': {
-                    'term': lookup
-                }
-            }
+            if len(lookup) > 1:
+                terms = [{'term': {key: value}} for key, value in lookup.items()]
+                query = {'query': {'filtered': {'filter': {'bool': {'must': terms}}}}}
+            else:
+                query = {'query': {'term': lookup}}
 
             try:
                 args['size'] = 1
