@@ -12,7 +12,7 @@ Features
 - fulltext search
 - filtering via elasticsearch filter dsl
 - facets support
-- aggragations support
+- aggregations support
 - elasticsearch mapping generator for schema
 
 License
