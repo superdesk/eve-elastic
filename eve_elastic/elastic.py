@@ -355,7 +355,8 @@ class Elastic(DataLayer):
         return self._parse_hits(hits, resource)
 
     def should_aggregate(self, req):
-        return current_app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or req.args.get('aggregations')
+        return current_app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or \
+            (req.args and req.args.get('aggregations'))
 
     def find_one(self, resource, req, **lookup):
 
