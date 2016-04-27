@@ -248,6 +248,10 @@ class Elastic(DataLayer):
                 continue
 
             properties = self._get_mapping(resource_config['schema'])
+            try:
+                del properties['properties']['_id'] # ElasticSearch >= 2.2.0 will fail if _id is present
+            except KeyError:
+                pass
             properties['properties'].update({
                 config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
                 config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
@@ -401,11 +405,25 @@ class Elastic(DataLayer):
         args = self._es_args(resource)
         return self._parse_hits(self.es.multi_get(ids, **args), resource)
 
+    def _get_body(self, doc):
+        """return doc usable as body
+
+        remove _id key if it is found
+        ElasticSearch >= 2.2.0 will fail if _id is present in body
+        """
+        if '_id' in doc:
+            body = doc.copy()
+            del body['_id']
+            return body
+        else:
+            return doc
+
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            res = self.es.index(body=doc, id=doc.get('_id'), **kwargs)
+            body = self._get_body(doc)
+            res = self.es.index(body=body, id=doc.get('_id'), **kwargs)
             ids.append(res.get('_id', doc.get('_id')))
         self._refresh_resource_index(resource)
         return ids
@@ -418,7 +436,7 @@ class Elastic(DataLayer):
 
     def update(self, resource, id_, updates):
         args = self._es_args(resource, refresh=True)
-        return self.es.update(id=id_, body={'doc': updates}, **args)
+        return self.es.update(id=id_, body={'doc': self._get_body(updates)}, **args)
 
     def replace(self, resource, id_, document):
         args = self._es_args(resource, refresh=True)
