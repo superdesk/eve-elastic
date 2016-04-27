@@ -257,7 +257,6 @@ class Elastic(DataLayer):
                 'index': index or self.index,
                 'doc_type': resource,
                 'body': properties,
-                'ignore_conflicts': True,
             }
 
             try:
