@@ -25,7 +25,7 @@ setup(
     tests_require=['nose'],
     install_requires=[
         'arrow>=0.4.2',
-        'elasticsearch>=1.2.0,<2.0.0',
+        'elasticsearch>=1.2.0,<3.0.0',
         'Eve>=0.4',
     ],
     classifiers=[
