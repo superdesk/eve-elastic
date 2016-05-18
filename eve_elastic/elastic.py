@@ -5,6 +5,7 @@ import arrow
 import logging
 import elasticsearch
 
+from bson import ObjectId
 from elasticsearch.helpers import bulk
 
 from flask import request, current_app
@@ -76,7 +77,11 @@ class InvalidIndexSettings(Exception):
 
 class ElasticJSONSerializer(elasticsearch.JSONSerializer):
     """Customize the JSON serializer used in Elastic."""
-    pass
+    def default(self, value):
+        """Convert mongo.ObjectId."""
+        if isinstance(value, ObjectId):
+            return str(value)
+        return super(ElasticJSONSerializer, self).default(value)
 
 
 class ElasticCursor(object):
@@ -139,6 +144,7 @@ def get_es(url, **kwargs):
     :param url: elasticsearch url
     """
     es = elasticsearch.Elasticsearch([url], **kwargs)
+    es.transport.serializer = ElasticJSONSerializer()
     return es
 
 
@@ -152,6 +158,7 @@ class Elastic(DataLayer):
     serializers = {
         'integer': int,
         'datetime': parse_date,
+        'objectid': ObjectId,
     }
 
     def __init__(self, app, **kwargs):
