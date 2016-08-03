@@ -238,6 +238,15 @@ class TestElastic(TestCase):
             res = self.app.data.find('items_with_description', req, None)
             self.assertEqual(1, res.count())
 
+    def test_should_aggregate(self):
+        with self.app.app_context():
+            self.app.config['ELASTICSEARCH_AUTO_AGGREGATIONS'] = False
+            req = ParsedRequest()
+            req.args = {'aggregations': 1}
+            self.assertTrue(self.app.data.should_aggregate(req))
+            req.args = {'aggregations': '0'}
+            self.assertFalse(self.app.data.should_aggregate(req))
+
     def test_mapping_is_there_after_delete(self):
         with self.app.app_context():
             self.app.data.put_mapping(self.app)

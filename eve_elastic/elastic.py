@@ -355,8 +355,13 @@ class Elastic(DataLayer):
         return self._parse_hits(hits, resource)
 
     def should_aggregate(self, req):
-        return current_app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or \
-            (req.args and req.args.get('aggregations'))
+        """ Checks the environment variable and the given argumanet parameter
+            to decide if aggregations needed. argument value is expected to be '0' or '1' """
+        try:
+            return current_app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or \
+                   bool(req.args and int(req.args.get('aggregations')))
+        except:
+            return False
 
     def find_one(self, resource, req, **lookup):
 
