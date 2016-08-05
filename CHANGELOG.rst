@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+0.3.8 (2016-08-05)
+++++++++++++++++++
+
+- add search highlights config
+- fix aggregations request trigger parsing
+
 0.3.7 (2016-04-13)
 ++++++++++++++++++
 

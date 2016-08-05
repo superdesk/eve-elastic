@@ -12,4 +12,5 @@ Eve-Elastic is written and maintained by:
 * Nicholas Iaquinto
 * Anca Farcas
 * Dinu Gherman
+* Mayur Dhamanwala
 
