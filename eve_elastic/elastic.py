@@ -42,6 +42,8 @@ def format_doc(hit, schema, dates):
     doc = hit.get('_source', {})
     doc.setdefault(config.ID_FIELD, hit.get('_id'))
     doc.setdefault('_type', hit.get('_type'))
+    if hit.get('highlight'):
+        doc['es_highlight'] = hit.get('highlight')
 
     for key in dates:
         if key in doc:
@@ -342,6 +344,9 @@ class Elastic(DataLayer):
         if 'aggregations' in source_config and self.should_aggregate(req):
             query['aggs'] = source_config['aggregations']
 
+        if 'es_highlight' in source_config and self.should_highlight(req):
+            query['highlight'] = source_config['es_highlight']
+
         args = self._es_args(resource)
         try:
             hits = self.es.search(body=query, **args)
@@ -355,11 +360,21 @@ class Elastic(DataLayer):
         return self._parse_hits(hits, resource)
 
     def should_aggregate(self, req):
-        """ Checks the environment variable and the given argumanet parameter
+        """ Checks the environment variable and the given argument parameter
             to decide if aggregations needed. argument value is expected to be '0' or '1' """
         try:
             return current_app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or \
                    bool(req.args and int(req.args.get('aggregations')))
+        except:
+            return False
+
+    def should_highlight(self, req):
+        """
+        Checks the given argument parameter to decide if aggregations needed.
+        argument value is expected to be '0' or '1'
+        """
+        try:
+            return bool(req.args and int(req.args.get('es_highlight', 0)))
         except:
             return False
 

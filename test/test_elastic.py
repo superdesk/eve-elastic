@@ -71,7 +71,15 @@ DOMAIN = {
             'projection': {'firstcreated': 1, 'name': 1},
             'default_sort': [('firstcreated', -1)],
             'elastic_filter': {'exists': {'field': 'description'}},
-            'aggregations': {'type': {'terms': {'field': 'name'}}}
+            'aggregations': {'type': {'terms': {'field': 'name'}}},
+            'es_highlight': {
+                                'pre_tags': ['<span class=\"es-highlight\">'],
+                                'post_tags': ['</span>'],
+                                'fields': {
+                                    'name': {'number_of_fragments': 0},
+                                    'description': {'number_of_fragments': 0}
+                                }
+            }
         }
     },
     'items_with_callback_filter': {
@@ -97,6 +105,15 @@ ELASTICSEARCH_SETTINGS = {
                 }
             }
         }
+    }
+}
+
+HIGHLIGHT = {
+    'pre_tags': ['<span class=\"es-highlight\">'],
+    'post_tags': ['</span>'],
+    'fields': {
+        'name': {'number_of_fragments': 0},
+        'description': {'number_of_fragments': 0},
     }
 }
 
@@ -238,6 +255,36 @@ class TestElastic(TestCase):
             res = self.app.data.find('items_with_description', req, None)
             self.assertEqual(1, res.count())
 
+    def test_search_via_source_param_and_with_highlight(self):
+        query = {'query': {'query_string': {'query': 'foo'}}}
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo',
+                                                             'description': 'This is foo',
+                                                             'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'bar', 'name': 'bar'}])
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query), 'es_highlight': 1}
+            res = self.app.data.find('items_with_description', req, None)
+            self.assertEqual(1, res.count())
+            es_highlight = res[0].get('es_highlight')
+            self.assertIsNotNone(es_highlight)
+            self.assertEqual(es_highlight.get('name')[0], '<span class=\"es-highlight\">foo</span>')
+            self.assertEqual(es_highlight.get('description')[0], 'This is <span class=\"es-highlight\">foo</span>')
+
+    def test_search_via_source_param_and_without_highlight(self):
+        query = {'query': {'query_string': {'query': 'foo'}}}
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo',
+                                                             'description': 'This is foo',
+                                                             'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'bar', 'name': 'bar'}])
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query), 'es_highlight': 0}
+            res = self.app.data.find('items_with_description', req, None)
+            self.assertEqual(1, res.count())
+            es_highlight = res[0].get('es_highlight')
+            self.assertIsNone(es_highlight)
+
     def test_should_aggregate(self):
         with self.app.app_context():
             self.app.config['ELASTICSEARCH_AUTO_AGGREGATIONS'] = False
@@ -246,6 +293,14 @@ class TestElastic(TestCase):
             self.assertTrue(self.app.data.should_aggregate(req))
             req.args = {'aggregations': '0'}
             self.assertFalse(self.app.data.should_aggregate(req))
+
+    def test_should_highlight(self):
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {'es_highlight': 1}
+            self.assertTrue(self.app.data.should_highlight(req))
+            req.args = {'es_highlight': '0'}
+            self.assertFalse(self.app.data.should_highlight(req))
 
     def test_mapping_is_there_after_delete(self):
         with self.app.app_context():
