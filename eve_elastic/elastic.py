@@ -111,21 +111,19 @@ class ElasticCursor(object):
 
 
 def set_filters(query, base_filters):
-    """Put together all filters we have and set them as 'and' filter
-    within filtered query.
+    """Put together all filters we have and set them as 'must' filter
+    within boolean query.
 
     :param query: elastic query being constructed
     :param base_filters: all filters set outside of query (eg. resource config, sub_resource_lookup)
     """
     filters = [f for f in base_filters if f is not None]
-    query_filter = query['query']['filtered'].get('filter', None)
+    query_filter = query['query']['bool'].get('filter', None)
     if query_filter is not None:
-        if 'and' in query_filter:
-            filters.extend(query_filter['and'])
-        else:
-            filters.append(query_filter)
+        assert 'and' not in query_filter # "and" is deprecated since ElasticSearch 2.X
+        filters.append(query_filter)
     if filters:
-        query['query']['filtered']['filter'] = {'and': filters}
+        query['query']['bool']['filter'] = {'bool': {'must': filters}}
 
 
 def set_sort(query, sort):
@@ -250,6 +248,10 @@ class Elastic(DataLayer):
                 continue
 
             properties = self._get_mapping(resource_config['schema'])
+            try:
+                del properties['properties']['_id'] # ElasticSearch >= 2.2.0 will fail if _id is present
+            except KeyError:
+                pass
             properties['properties'].update({
                 config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
                 config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
@@ -259,7 +261,6 @@ class Elastic(DataLayer):
                 'index': index or self.index,
                 'doc_type': resource,
                 'body': properties,
-                'ignore_conflicts': True,
             }
 
             try:
@@ -304,24 +305,24 @@ class Elastic(DataLayer):
 
         if args.get('source'):
             query = json.loads(args.get('source'))
-            if 'filtered' not in query.get('query', {}):
-                _query = query.get('query')
-                query['query'] = {'filtered': {}}
+            _query = query.get('query', {})
+            if 'bool' not in _query:
+                query['query'] = {'bool': {}}
                 if _query:
-                    query['query']['filtered']['query'] = _query
+                    query['query']['bool']['must'] = _query
         else:
-            query = {'query': {'filtered': {}}}
+            query = {'query': {'bool': {}}}
 
         if args.get('q', None):
-            query['query']['filtered']['query'] = _build_query_string(args.get('q'),
-                                                                      default_field=args.get('df', '_all'),
-                                                                      default_operator=args.get('default_operator', 'OR'))
+            query['query']['bool']['must'] = _build_query_string(args.get('q'),
+                                                                 default_field=args.get('df', '_all'),
+                                                                 default_operator=args.get('default_operator', 'OR'))
 
         if 'sort' not in query:
             if req.sort:
                 sort = ast.literal_eval(req.sort)
                 set_sort(query, sort)
-            elif self._default_sort(resource) and 'query' not in query['query']['filtered']:
+            elif self._default_sort(resource) and 'must' not in query['query']['bool']:
                 set_sort(query, self._default_sort(resource))
 
         if req.max_results:
@@ -401,7 +402,7 @@ class Elastic(DataLayer):
         else:
             if len(lookup) > 1:
                 terms = [{'term': {key: value}} for key, value in lookup.items()]
-                query = {'query': {'filtered': {'filter': {'bool': {'must': terms}}}}}
+                query = {'query': {'bool': {'filter': {'bool': {'must': terms}}}}}
             else:
                 query = {'query': {'term': lookup}}
 
@@ -422,11 +423,25 @@ class Elastic(DataLayer):
         args = self._es_args(resource)
         return self._parse_hits(self.es.multi_get(ids, **args), resource)
 
+    def _get_body(self, doc):
+        """return doc usable as body
+
+        remove _id key if it is found
+        ElasticSearch >= 2.2.0 will fail if _id is present in body
+        """
+        if '_id' in doc:
+            body = doc.copy()
+            del body['_id']
+            return body
+        else:
+            return doc
+
     def insert(self, resource, doc_or_docs, **kwargs):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            res = self.es.index(body=doc, id=doc.get('_id'), **kwargs)
+            body = self._get_body(doc)
+            res = self.es.index(body=body, id=doc.get('_id'), **kwargs)
             ids.append(res.get('_id', doc.get('_id')))
         self._refresh_resource_index(resource)
         return ids
@@ -439,7 +454,7 @@ class Elastic(DataLayer):
 
     def update(self, resource, id_, updates):
         args = self._es_args(resource, refresh=True)
-        return self.es.update(id=id_, body={'doc': updates}, **args)
+        return self.es.update(id=id_, body={'doc': self._get_body(updates)}, **args)
 
     def replace(self, resource, id_, document):
         args = self._es_args(resource, refresh=True)
@@ -542,8 +557,8 @@ def build_elastic_query(doc):
     1. Converts {"q":"cricket"} to the below elastic query
     {
         "query": {
-            "filtered": {
-                "query": {
+            "bool": {
+                "must": {
                     "query_string": {
                         "query": "cricket",
                         "lenient": false,
@@ -559,20 +574,22 @@ def build_elastic_query(doc):
     to the below elastic query
     {
         "query": {
-            "filtered": {
-                "filter": {
-                    "and": [
-                        {"terms": {"type": ["text"]}},
-                        {"term": {"source": "AAP"}}
-                    ]
-                },
-                "query": {
+            "bool": {
+                "must": {
                     "query_string": {
                         "query": "cricket",
                         "lenient": false,
                         "default_operator": "AND"
                     }
                 }
+                "filter": {
+                    "bool": {
+                        "must": [
+                            {"terms": {"type": ["text"]}},
+                            {"term": {"source": "AAP"}}
+                        ]
+                    }
+                },
             }
         }
     }
@@ -582,11 +599,11 @@ def build_elastic_query(doc):
     :returns ElasticSearch query
     """
 
-    elastic_query, filters = {"query": {"filtered": {}}}, []
+    elastic_query, filters = {"query": {"bool": {}}}, []
 
     for key in doc.keys():
         if key == 'q':
-            elastic_query['query']['filtered']['query'] = _build_query_string(doc['q'])
+            elastic_query['query']['bool']['must'] = _build_query_string(doc['q'])
         else:
             _value = doc[key]
             filters.append({"terms": {key: _value}} if isinstance(_value, list) else {"term": {key: _value}})
