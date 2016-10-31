@@ -22,7 +22,7 @@ setup(
     url='https://github.com/petrjasek/eve-elastic',
     packages=['eve_elastic'],
     test_suite='test.test_elastic',
-    tests_require=['nose'],
+    tests_require=['nose', 'flake8'],
     install_requires=[
         'arrow>=0.4.2',
         'elasticsearch>=1.2.0,<2.0.0',
