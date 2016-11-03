@@ -3,6 +3,13 @@
 Changelog
 ---------
 
+0.4 (2016-11-03)
+++++++++++++++++
+
+- implement ``elastic_prefix`` resource config similar to ``mongo_prefix`` in eve
+- change ``init_app`` behaviour - it won't call ``init_index`` anymore, it must be
+  called explicitly
+
 0.3.8 (2016-08-05)
 ++++++++++++++++++
 
@@ -12,43 +19,43 @@ Changelog
 0.3.7 (2016-04-13)
 ++++++++++++++++++
 
-- fix search when there is no `request.args`
+- fix search when there is no ``request.args``
 
 0.3.6 (2016-03-21)
 ++++++++++++++++++
 
-- fix `find_one` with multi term lookup
+- fix ``find_one`` with multi term lookup
 
 0.3.5 (2016-03-17)
 ++++++++++++++++++
 
-- add `skip_index_init` param to Elastic
+- add ``skip_index_init`` param to Elastic
 
 0.3.4 (2016-03-17)
 ++++++++++++++++++
 
-- make `init_index` put mapping always, no matter if index is there already
+- make ``init_index`` put mapping always, no matter if index is there already
 
 0.3.3 (2016-03-15)
 ++++++++++++++++++
 
-- introduce `init_index` method to create index and put mapping
+- introduce ``init_index`` method to create index and put mapping
 
 0.3.2 (2016-02-11)
 ++++++++++++++++++
 
-- introduce `ELASTICSEARCH_AUTO_AGGREGATIONS` config option
+- introduce ``ELASTICSEARCH_AUTO_AGGREGATIONS`` config option
 
 0.3.1 (2016-02-11)
 ++++++++++++++++++
 
-- introduce `ELASTICSEARCH_FORCE_REFRESH` settings that is `True` by default
-- fix for `ELASTICSEARCH_INDEXES` when using `datasource.source` config
+- introduce ``ELASTICSEARCH_FORCE_REFRESH`` settings that is ``True`` by default
+- fix for ``ELASTICSEARCH_INDEXES`` when using ``datasource.source`` config
 
 0.3.0 (2016-02-08)
 ++++++++++++++++++
 
-- introduce `ELASTICSEARCH_INDEXES` settings for setting different index per resource
+- introduce ``ELASTICSEARCH_INDEXES`` settings for setting different index per resource
 
 0.2.21 (2015-11-20)
 +++++++++++++++++++

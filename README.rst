@@ -45,7 +45,7 @@ There are 2 options for Eve-Elastic taken from ``app.config``:
 - ``ELASTICSEARCH_URL`` (default: ``'http://localhost:9200/'``)
 - ``ELASTICSEARCH_INDEX`` - (default: ``'eve'``)
 - ``ELASTICSEARCH_INDEXES`` - (default: ``{}``) - ``resource`` to ``index`` mapping
-- ``ELASTICSEARCH_FORCE_REFRESH`` - (default: ``False``) - force index refresh after every modification
+- ``ELASTICSEARCH_FORCE_REFRESH`` - (default: ``True``) - force index refresh after every modification
 - ``ELASTICSEARCH_AUTO_AGGREGATIONS`` - (default: ``True``) - return aggregates on every search if configured for resource
 
 Query params
