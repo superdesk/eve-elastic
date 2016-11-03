@@ -90,7 +90,26 @@ DOMAIN = {
             'backend': 'elastic',
             'elastic_filter_callback': lambda: {'term': {'uri': 'foo'}}
         }
-    }
+    },
+    'items_foo': {
+        'schema': {
+            'uri': {'type': 'string'},
+            'firstcreated': {'type': 'datetime'},
+        },
+        'datasource': {
+            'backend': 'elastic',
+        },
+        'elastic_prefix': 'FOO',
+    },
+    'items_foo_default_index': {
+        'schema': {
+            'uri': {'type': 'string'}
+        },
+        'datasource': {
+            'source': 'items_foo',
+            'backend': 'elastic'
+        },
+    },
 }
 
 
@@ -134,10 +153,13 @@ class TestElastic(TestCase):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
         settings['ELASTICSEARCH_INDEX'] = INDEX
+        settings['FOO_URL'] = settings['ELASTICSEARCH_URL']
+        settings['FOO_INDEX'] = 'foo'
         self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
         self.drop_index(INDEX)
         self.app = eve.Eve(settings=settings, data=Elastic)
-        self.app.data.init_index(self.app)
+        with self.app.app_context():
+            self.app.data.init_index(self.app)
 
     def test_parse_date(self):
         date = parse_date('2013-11-06T07:56:01.414944+00:00')
@@ -154,7 +176,8 @@ class TestElastic(TestCase):
     def test_put_mapping(self):
         elastic = Elastic(None)
         elastic.init_app(self.app)
-        elastic.put_mapping(self.app)
+        with self.app.app_context():
+            elastic.put_mapping(self.app)
 
         mapping = elastic.get_mapping(elastic.index)
         self.assertNotIn('published_items', mapping['mappings'])
@@ -540,7 +563,8 @@ class TestElastic(TestCase):
 
         self.app.data = Elastic(self.app)
         self.app.data.init_app(self.app)
-        self.app.data.init_index(self.app)
+        with self.app.app_context():
+            self.app.data.init_index()
 
         self.assertTrue(self.es.indices.exists(archived_index))
         self.assertEqual(0, self.es.count(archived_index, archived_type)['count'])
@@ -571,6 +595,21 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(2, cursor.count())
+
+    def test_elastic_prefix(self):
+        self.drop_index('foo')
+        with self.app.app_context():
+            self.app.data.init_index()
+            mapping = self.app.data.get_mapping('foo', 'items_foo')['mappings']['items_foo']['properties']
+            self.assertIn('firstcreated', mapping)
+
+            self.app.data.insert('items_foo_default_index', [{'uri': 'test'}])
+            foo_items = self.app.data.find('items_foo', ParsedRequest(), None)
+            self.assertEqual(0, foo_items.count())
+
+            self.app.data.insert('items_foo', [{'uri': 'foo'}, {'uri': 'bar'}])
+            foo_items = self.app.data.find('items_foo', ParsedRequest(), None)
+            self.assertEqual(2, foo_items.count())
 
 
 class TestElasticSearchWithSettings(TestCase):
@@ -606,8 +645,8 @@ class TestElasticSearchWithSettings(TestCase):
         }
 
         self.app = eve.Eve(settings=settings, data=Elastic)
-        self.app.data.init_index(self.app)
         with self.app.app_context():
+            self.app.data.init_index(self.app)
             for resource in self.app.config['DOMAIN']:
                 self.app.data.remove(resource)
 
@@ -649,8 +688,7 @@ class TestElasticSearchWithSettings(TestCase):
                 'filter': ['uppercase']
             }
 
-            self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
-            self.app.data.put_settings(self.app, self.index_name)
+            self.app.data.put_settings(self.app, self.index_name, new_settings)
             settings = self.app.data.get_settings(self.index_name)
             analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
