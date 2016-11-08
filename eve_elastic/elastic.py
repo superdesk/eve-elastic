@@ -179,7 +179,11 @@ class Elastic(DataLayer):
         """Create indexes and put mapping."""
         indexes = set()
         for resource in self._get_elastic_resources():
-            index = self._resource_index(resource)
+            try:
+                index = self._resource_index(resource)
+            except KeyError:  # ignore missing
+                continue
+
             es = self.elastic(resource)
 
             if index not in indexes:
