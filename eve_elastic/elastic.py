@@ -147,7 +147,8 @@ def get_es(url, **kwargs):
 
     :param url: elasticsearch url
     """
-    es = elasticsearch.Elasticsearch([url], **kwargs)
+    urls = [url] if isinstance(url, str) else url
+    es = elasticsearch.Elasticsearch(urls, **kwargs)
     es.transport.serializer = ElasticJSONSerializer()
     return es
 
