@@ -7,9 +7,10 @@ import elasticsearch
 
 from elasticsearch.helpers import bulk
 
-from flask import request
+from flask import request, abort
 from eve.utils import config
 from eve.io.base import DataLayer
+from eve.io.mongo.parser import parse, ParseError
 from uuid import uuid4
 
 
@@ -386,6 +387,16 @@ class Elastic(DataLayer):
         filters.append({'term': sub_resource_lookup} if sub_resource_lookup else None)
         filters.append(json.loads(args.get('filter')) if 'filter' in args else None)
         filters.extend(args.get('filters') if 'filters' in args else [])
+
+        if req.where:
+            try:
+                filters.append({'term': json.loads(req.where)})
+            except ValueError:
+                try:
+                    filters.append({'term': parse(req.where)})
+                except ParseError:
+                    abort(400)
+
         set_filters(query, filters)
 
         if 'facets' in source_config:
