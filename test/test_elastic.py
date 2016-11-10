@@ -743,3 +743,7 @@ class TestElasticSearchWithSettings(TestCase):
                     self.assertEqual(log.output, ['WARNING:elastic:mapping error, updating settings resource=items'])
             else:
                 self.app.data.put_mapping(self.app)
+
+    def test_cluster(self):
+        es = get_es(['http://localhost:9200', 'http://localhost:9200'])
+        self.assertIsNotNone(es)

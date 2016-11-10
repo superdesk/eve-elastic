@@ -42,7 +42,7 @@ Config
 ------
 There are 2 options for Eve-Elastic taken from ``app.config``:
 
-- ``ELASTICSEARCH_URL`` (default: ``'http://localhost:9200/'``)
+- ``ELASTICSEARCH_URL`` (default: ``'http://localhost:9200/'``) - this can be either single url or list of urls
 - ``ELASTICSEARCH_INDEX`` - (default: ``'eve'``)
 - ``ELASTICSEARCH_INDEXES`` - (default: ``{}``) - ``resource`` to ``index`` mapping
 - ``ELASTICSEARCH_FORCE_REFRESH`` - (default: ``True``) - force index refresh after every modification
