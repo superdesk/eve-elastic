@@ -376,6 +376,19 @@ class TestElastic(TestCase):
             req.args['source'] = json.dumps({'query': {'filtered': {'filter': {'term': {'uri': 'bar'}}}}})
             self.assertEqual(0, self.app.data.find('items_with_description', req, None).count())
 
+    def test_where_filter(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [{'uri': 'foo', 'name': 'foo'}, {'uri': 'bar', 'name': 'bar'}])
+
+        with self.app.test_client() as c:
+            response = c.get('items?where={"name":"foo"}')
+            data = json.loads(response.data)
+            self.assertEqual(1, len(data['_items']))
+
+            response = c.get('items?where=name=="foo"')
+            data = json.loads(response.data)
+            self.assertEqual(1, len(data['_items']))
+
     def test_update(self):
         with self.app.app_context():
             ids = self.app.data.insert('items', [{'uri': 'foo'}])
