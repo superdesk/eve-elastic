@@ -3,6 +3,13 @@
 Changelog
 ---------
 
+0.5 (2016-11-14)
+++++++++++++++++
+
+- allow list of urls to be set in ``ELASTICSEARCH_URL``
+- add support for ``where`` param
+- handle ``bson.ObjectId`` serialization
+
 0.4.1 (2016-11-08)
 ++++++++++++++++++
 
