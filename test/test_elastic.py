@@ -747,3 +747,10 @@ class TestElasticSearchWithSettings(TestCase):
     def test_cluster(self):
         es = get_es(['http://localhost:9200', 'http://localhost:9200'])
         self.assertIsNotNone(es)
+
+    def test_serializer_config(self):
+        class TestSerializer(elasticsearch.JSONSerializer):
+            pass
+
+        es = get_es('http://localhost:9200', serializer=TestSerializer())
+        self.assertIsInstance(es.transport.serializer, TestSerializer)
