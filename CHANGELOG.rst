@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+0.6 (2016-11-16)
+++++++++++++++++
+
+- handle projections
+- parse dates using `ciso8601`
+
 0.5.2 (2016-11-15)
 ++++++++++++++++++
 
