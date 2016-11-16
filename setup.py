@@ -25,6 +25,8 @@ setup(
     tests_require=['nose', 'flake8'],
     install_requires=[
         'arrow>=0.4.2',
+        'ciso8601>=1.0.2',
+        'pytz>=2015.4',
         'elasticsearch>=1.2.0,<2.0.0',
         'Eve>=0.4',
     ],

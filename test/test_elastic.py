@@ -308,6 +308,20 @@ class TestElastic(TestCase):
             es_highlight = res[0].get('es_highlight')
             self.assertIsNone(es_highlight)
 
+    def test_search_via_source_param_and_with_source_projection(self):
+        query = {'query': {'query_string': {'query': 'foo'}}}
+        with self.app.app_context():
+            self.app.data.insert('items_with_description', [{'uri': 'foo',
+                                                             'description': 'This is foo',
+                                                             'name': 'foo'}])
+            self.app.data.insert('items_with_description', [{'uri': 'bar', 'name': 'bar'}])
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query), 'projections': json.dumps(["name"])}
+            res = self.app.data.find('items_with_description', req, None)
+            self.assertEqual(1, res.count())
+            self.assertTrue('description' not in res.docs[0])
+            self.assertTrue('name' in res.docs[0])
+
     def test_should_aggregate(self):
         with self.app.app_context():
             self.app.config['ELASTICSEARCH_AUTO_AGGREGATIONS'] = False
@@ -316,6 +330,23 @@ class TestElastic(TestCase):
             self.assertTrue(self.app.data.should_aggregate(req))
             req.args = {'aggregations': '0'}
             self.assertFalse(self.app.data.should_aggregate(req))
+
+    def test_should_project(self):
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {'projections': json.dumps(["priority", "urgency", "word_count", "slugline", "highlights"])}
+            self.assertTrue(self.app.data.should_project(req))
+            req.args = {'projections': json.dumps([])}
+            self.assertFalse(self.app.data.should_project(req))
+            req.args = {}
+            self.assertFalse(self.app.data.should_project(req))
+
+    def test_get_projected_fields(self):
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {'projections': json.dumps(["priority", "urgency", "word_count", "slugline", "highlights"])}
+            fields = self.app.data.get_projected_fields(req)
+            self.assertEqual(fields, "priority,urgency,word_count,slugline,highlights")
 
     def test_should_highlight(self):
         with self.app.app_context():

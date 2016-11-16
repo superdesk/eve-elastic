@@ -2,6 +2,8 @@
 import ast
 import json
 import arrow
+import ciso8601
+import pytz  # NOQA
 import logging
 import elasticsearch
 
@@ -25,10 +27,12 @@ def parse_date(date_str):
         return None
 
     try:
-        date = arrow.get(date_str)
+        date = ciso8601.parse_datetime(date_str)
+        if not date:
+            date = arrow.get(date_str).datetime
     except TypeError:
-        date = arrow.get(date_str[0])
-    return date.datetime
+        date = arrow.get(date_str[0]).datetime
+    return date
 
 
 def get_dates(schema):
@@ -416,7 +420,11 @@ class Elastic(DataLayer):
         if 'es_highlight' in source_config and self.should_highlight(req):
             query['highlight'] = source_config['es_highlight']
 
-        args = self._es_args(resource)
+        source_projections = None
+        if self.should_project(req):
+            source_projections = self.get_projected_fields(req)
+
+        args = self._es_args(resource, source_projections=source_projections)
         try:
             hits = self.elastic(resource).search(body=query, **args)
         except elasticsearch.exceptions.RequestError as e:
@@ -442,7 +450,7 @@ class Elastic(DataLayer):
 
     def should_highlight(self, req):
         """
-        Check the given argument parameter to decide if aggregations needed.
+        Check the given argument parameter to decide if highlights needed.
 
         argument value is expected to be '0' or '1'
         """
@@ -450,6 +458,28 @@ class Elastic(DataLayer):
             return bool(req.args and int(req.args.get('es_highlight', 0)))
         except:
             return False
+
+    def should_project(self, req):
+        """
+        Check the given argument parameter to decide if projections needed.
+
+        argument value is expected to be a list of strings
+        """
+        try:
+            return req.args and json.loads(req.args.get('projections', []))
+        except:
+            return False
+
+    def get_projected_fields(self, req):
+        """
+        Returns the projected fields from request.
+
+        """
+        try:
+            args = getattr(req, 'args', {})
+            return ','.join(json.loads(args.get('projections')))
+        except:
+            return None
 
     def find_one(self, resource, req, **lookup):
         """Find single document, if there is _id in lookup use that, otherwise filter."""
@@ -586,13 +616,15 @@ class Elastic(DataLayer):
             docs.append(format_doc(hit, schema, dates))
         return ElasticCursor(hits, docs)
 
-    def _es_args(self, resource, refresh=None):
+    def _es_args(self, resource, refresh=None, source_projections=None):
         """Get index and doctype args."""
         datasource = self.get_datasource(resource)
         args = {
             'index': self._resource_index(resource),
             'doc_type': datasource[0],
         }
+        if source_projections:
+            args['_source'] = source_projections
         if refresh:
             args['refresh'] = refresh
         return args
