@@ -8,13 +8,14 @@ import logging
 import elasticsearch
 
 from bson import ObjectId
-from elasticsearch.helpers import bulk
+from elasticsearch.helpers import bulk, reindex as reindex_new
+from .helpers import reindex as reindex_old
 
+from uuid import uuid4
 from flask import request, abort
 from eve.utils import config
 from eve.io.base import DataLayer
 from eve.io.mongo.parser import parse, ParseError
-from uuid import uuid4
 
 
 logging.basicConfig()
@@ -71,6 +72,14 @@ def is_elastic(datasource):
 def generate_index_name(alias):
     random = str(uuid4()).split('-')[0]
     return '{}_{}'.format(alias, random)
+
+
+def reindex(es, source, dest):
+    version = es.info().get('version').get('number')
+    if version.startswith('1.'):
+        return reindex_old(es, source, dest)
+    else:
+        return reindex_new(es, source, dest)
 
 
 class InvalidSearchString(Exception):
