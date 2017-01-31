@@ -214,9 +214,9 @@ class TestElastic(TestCase):
     def test_bulk_insert(self):
         with self.app.app_context():
             (count, _errors) = self.app.data.bulk_insert('items_with_description', [
-                {'uri': 'u1', 'name': 'foo', 'firstcreated': '2012-01-01T11:12:13+0000'},
-                {'uri': 'u2', 'name': 'foo', 'firstcreated': '2013-01-01T11:12:13+0000'},
-                {'uri': 'u3', 'name': 'foo', 'description': 'test', 'firstcreated': '2013-01-01T11:12:13+0000'},
+                {'_id': 'u1', 'uri': 'u1', 'name': 'foo', 'firstcreated': '2012-01-01T11:12:13+0000'},
+                {'_id': 'u2', 'uri': 'u2', 'name': 'foo', 'firstcreated': '2013-01-01T11:12:13+0000'},
+                {'_id': 'u3', 'uri': 'u3', 'name': 'foo', 'description': 'test', 'firstcreated': '2013-01-01T11:12:13+0000'},
             ])
             self.assertEquals(3, count)
             self.assertEquals(0, len(_errors))
@@ -390,6 +390,7 @@ class TestElastic(TestCase):
             req.args = {}
             self.assertEqual(1, self.app.data.find('items', req, {'name': 'foo'}).count())
             self.assertEqual(0, self.app.data.find('items', req, {'name': 'bar'}).count())
+            self.assertEqual(1, self.app.data.find('items', req, {'name': 'foo', 'uri': 'foo'}).count())
 
     def test_sub_resource_lookup_with_schema_filter(self):
         with self.app.app_context():
@@ -423,13 +424,13 @@ class TestElastic(TestCase):
     def test_update(self):
         with self.app.app_context():
             ids = self.app.data.insert('items', [{'uri': 'foo'}])
-            self.app.data.update('items', ids[0], {'uri': 'bar'})
+            self.app.data.update('items', ids[0], {'uri': 'bar', '_id': ids[0], '_type': 'items'})
             self.assertEqual(self.app.data.find_one('items', req=None, _id=ids[0])['uri'], 'bar')
 
-    def test_remove_with_query(self):
+    def test_remove_by_id(self):
         with self.app.app_context():
-            self.app.data.insert('items', [{'uri': 'foo'}, {'uri': 'bar'}])
-            self.app.data.remove('items', {'query': {'term': {'uri': 'bar'}}})
+            self.ids = self.app.data.insert('items', [{'uri': 'foo'}, {'uri': 'bar'}])
+            self.app.data.remove('items', {'_id': self.ids[0]})
             req = ParsedRequest()
             req.args = {}
             self.assertEqual(1, self.app.data.find('items', req, None).count())
@@ -586,7 +587,6 @@ class TestElastic(TestCase):
             self.assertEqual('foo', cursor[0]['uri'])
 
     def test_elastic_find_default_sort_no_mapping(self):
-        self.app.data.es.indices.delete_mapping(INDEX, '_all')
         with self.app.test_request_context('/items/'):
             req = parse_request('items')
             req.args = {}
@@ -671,7 +671,7 @@ class TestElasticSearchWithSettings(TestCase):
                                 'fields': {
                                     'phrase': {
                                         'type': 'string',
-                                        'index_analyzer': 'phrase_prefix_analyzer',
+                                        'analyzer': 'phrase_prefix_analyzer',
                                         'search_analyzer': 'phrase_prefix_analyzer'
                                     }
                                 }
@@ -752,7 +752,7 @@ class TestElasticSearchWithSettings(TestCase):
                     'fields': {
                         'phrases': {
                             'type': 'string',
-                            'index_analyzer': 'prefix_analyzer',
+                            'analyzer': 'prefix_analyzer',
                             'search_analyzer': 'prefix_analyzer'
                         }
                     }
@@ -771,7 +771,7 @@ class TestElasticSearchWithSettings(TestCase):
             if hasattr(self, 'assertLogs'):
                 with self.assertLogs('elastic') as log:
                     self.app.data.put_mapping(self.app)
-                    self.assertEqual(log.output, ['WARNING:elastic:mapping error, updating settings resource=items'])
+                    self.assertIn('ERROR:elastic:mapping error, updating settings resource=items', log.output[0])
             else:
                 self.app.data.put_mapping(self.app)
 
