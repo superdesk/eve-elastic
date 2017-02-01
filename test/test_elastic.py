@@ -250,6 +250,12 @@ class TestElastic(TestCase):
             item = self.app.data.find_one('items', req=None, **{config.ID_FIELD: 'testid'})
             self.assertEqual('testid', item[config.ID_FIELD])
 
+    def test_find_one_multiple_criteria(self):
+        with self.app.app_context():
+            self.app.data.insert('items', [{'uri': 'test', 'name': 'foo', config.ID_FIELD: 'testid'}])
+            item = self.app.data.find_one('items', req=None, name='foo', uri='test')
+            self.assertEqual('testid', item[config.ID_FIELD])
+
     def test_formating_fields(self):
         """when using elastic 1.0+ it puts all requested fields values into a list
         so instead of {"name": "test"} it returns {"name": ["test"]}"""

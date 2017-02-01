@@ -522,7 +522,8 @@ class Elastic(DataLayer):
             docs = self._parse_hits({'hits': {'hits': [hit]}}, resource)
             return docs.first()
         else:
-            query = {'query': {'constant_score': {'filter': {'term': lookup}}}}
+            filters = [{'term': {key: val}} for key, val in lookup.items()]
+            query = {'query': {'constant_score': {'filter': {'and': filters}}}}
 
             try:
                 args['size'] = 1
