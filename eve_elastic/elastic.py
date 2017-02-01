@@ -436,17 +436,8 @@ class Elastic(DataLayer):
 
         args = self._es_args(resource, source_projections=source_projections)
         try:
-            try:
-                print('query', resource, args, json.dumps(query, indent=4))
-            except:
-                pass
             hits = self.elastic(resource).search(body=query, **args)
-            try:
-                print('hits', json.dumps(hits, indent=4))
-            except:
-                pass
         except elasticsearch.exceptions.RequestError as e:
-            raise
             if e.status_code == 400 and "No mapping found for" in e.error:
                 hits = {}
             elif e.status_code == 400 and 'SearchParseException' in e.error:
