@@ -8,13 +8,14 @@ import logging
 import elasticsearch
 
 from bson import ObjectId
-from elasticsearch.helpers import bulk
+from elasticsearch.helpers import bulk, reindex as reindex_new
+from .helpers import reindex as reindex_old
 
+from uuid import uuid4
 from flask import request, abort
 from eve.utils import config
 from eve.io.base import DataLayer
 from eve.io.mongo.parser import parse, ParseError
-from uuid import uuid4
 
 
 logging.basicConfig()
@@ -71,6 +72,14 @@ def is_elastic(datasource):
 def generate_index_name(alias):
     random = str(uuid4()).split('-')[0]
     return '{}_{}'.format(alias, random)
+
+
+def reindex(es, source, dest):
+    version = es.info().get('version').get('number')
+    if version.startswith('1.'):
+        return reindex_old(es, source, dest)
+    else:
+        return reindex_new(es, source, dest)
 
 
 class InvalidSearchString(Exception):
@@ -278,14 +287,9 @@ class Elastic(DataLayer):
 
     def _put_resource_mapping(self, resource, es, force_index=None):
         resource_config = self.app.config['DOMAIN'][resource]
-        properties = self._get_mapping(resource_config['schema'])
-        properties['properties'].update({
-            config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
-            config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
-        })
+        properties = self._get_mapping_properties(resource_config)
 
         kwargs = self._es_args(resource)
-        kwargs['ignore_conflicts'] = True
         kwargs['body'] = properties
 
         if force_index:
@@ -297,7 +301,17 @@ class Elastic(DataLayer):
         try:
             es.indices.put_mapping(**kwargs)
         except elasticsearch.exceptions.RequestError:
-            logger.warning('mapping error, updating settings resource=%s' % resource)
+            logger.exception('mapping error, updating settings resource=%s' % resource)
+
+    def _get_mapping_properties(self, resource_config):
+        properties = self._get_mapping(resource_config['schema'])
+        properties['properties'].update({
+            config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
+            config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
+        })
+
+        properties['properties'].pop('_id', None)
+        return properties
 
     def put_mapping(self, app, index=None):
         """Put mapping for elasticsearch for current schema.
@@ -313,23 +327,18 @@ class Elastic(DataLayer):
             if datasource.get('source', resource) != resource:  # only put mapping for core types
                 continue
 
-            properties = self._get_mapping(resource_config['schema'])
-            properties['properties'].update({
-                config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
-                config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
-            })
+            properties = self._get_mapping_properties(resource_config)
 
             kwargs = {
                 'index': index or self._resource_index(resource),
                 'doc_type': resource,
                 'body': properties,
-                'ignore_conflicts': True,
             }
 
             try:
                 self.elastic(resource).indices.put_mapping(**kwargs)
             except elasticsearch.exceptions.RequestError:
-                logger.warning('mapping error, updating settings resource=%s' % resource)
+                logger.exception('mapping error, updating settings resource=%s' % resource)
 
     def get_mapping(self, index, doc_type=None):
         """Get mapping for index.
@@ -396,7 +405,7 @@ class Elastic(DataLayer):
         filters = []
         filters.append(source_config.get('elastic_filter'))
         filters.append(source_config.get('elastic_filter_callback', noop)())
-        filters.append({'term': sub_resource_lookup} if sub_resource_lookup else None)
+        filters.append({'and': _build_lookup_filter(sub_resource_lookup)} if sub_resource_lookup else None)
         filters.append(json.loads(args.get('filter')) if 'filter' in args else None)
         filters.extend(args.get('filters') if 'filters' in args else [])
 
@@ -419,6 +428,7 @@ class Elastic(DataLayer):
 
         if 'es_highlight' in source_config and self.should_highlight(req):
             query['highlight'] = source_config['es_highlight']
+            query['highlight'].setdefault('require_field_match', False)
 
         source_projections = None
         if self.should_project(req):
@@ -503,11 +513,8 @@ class Elastic(DataLayer):
             docs = self._parse_hits({'hits': {'hits': [hit]}}, resource)
             return docs.first()
         else:
-            if len(lookup) > 1:
-                terms = [{'term': {key: value}} for key, value in lookup.items()]
-                query = {'query': {'filtered': {'filter': {'bool': {'must': terms}}}}}
-            else:
-                query = {'query': {'term': lookup}}
+            filters = [{'term': {key: val}} for key, val in lookup.items()]
+            query = {'query': {'constant_score': {'filter': {'and': filters}}}}
 
             try:
                 args['size'] = 1
@@ -533,8 +540,10 @@ class Elastic(DataLayer):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            res = self.elastic(resource).index(body=doc, id=doc.get('_id'), **kwargs)
-            ids.append(res.get('_id', doc.get('_id')))
+            _id = doc.pop('_id', None)
+            res = self.elastic(resource).index(body=doc, id=_id, **kwargs)
+            doc.setdefault('_id', res.get('_id', _id))
+            ids.append(doc.get('_id'))
         self._refresh_resource_index(resource)
         return ids
 
@@ -548,11 +557,15 @@ class Elastic(DataLayer):
     def update(self, resource, id_, updates):
         """Update document in index."""
         args = self._es_args(resource, refresh=True)
+        updates.pop('_id', None)
+        updates.pop('_type', None)
         return self.elastic(resource).update(id=id_, body={'doc': updates}, **args)
 
     def replace(self, resource, id_, document):
         """Replace document in index."""
         args = self._es_args(resource, refresh=True)
+        document.pop('_id', None)
+        document.pop('_type', None)
         return self.elastic(resource).index(body=document, id=id_, **args)
 
     def remove(self, resource, lookup=None):
@@ -568,11 +581,7 @@ class Elastic(DataLayer):
                     return self.elastic(resource).delete(id=lookup.get('_id'), refresh=True, **args)
                 except elasticsearch.NotFoundError:
                     return
-            else:
-                return self.elastic(resource).delete_by_query(body=lookup, **args)
-        else:
-            query = {'query': {'match_all': {}}}
-            return self.elastic(resource).delete_by_query(body=query, **args)
+        return ValueError('there must be `lookup._id` specified')
 
     def is_empty(self, resource):
         """Test if there is no document for resource.
@@ -771,3 +780,7 @@ def _build_query_string(q, default_field=None, default_operator='AND'):
         query['query_string'].update({'lenient': False} if default_field else {'default_field': default_field})
 
     return query
+
+
+def _build_lookup_filter(lookup):
+    return [{'term': {key: val}} for key, val in lookup.items()]
