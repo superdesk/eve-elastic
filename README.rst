@@ -19,6 +19,13 @@ License
 -------
 Eve-Elastic is `GPLv3 <http://www.gnu.org/licenses/gpl-3.0.txt>`_ licensed.
 
+Supported elastic versions
+--------------------------
+
+It supports ``1.7`` and ``2.x`` versions. If you limit your queries to those which work
+with both you can have single codebase for both.
+
+
 Install
 -------
 
