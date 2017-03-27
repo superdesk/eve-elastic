@@ -427,8 +427,12 @@ class Elastic(DataLayer):
             query['aggs'] = source_config['aggregations']
 
         if 'es_highlight' in source_config and self.should_highlight(req):
-            query['highlight'] = source_config['es_highlight']
-            query['highlight'].setdefault('require_field_match', False)
+            query_string = query['query'].get('filtered', {}).get('query', {}).get('query_string')
+            highlights = source_config.get('es_highlight', noop)(query_string)
+
+            if highlights:
+                query['highlight'] = highlights
+                query['highlight'].setdefault('require_field_match', False)
 
         source_projections = None
         if self.should_project(req):

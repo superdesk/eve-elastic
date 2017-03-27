@@ -12,6 +12,22 @@ from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es, genera
 from nose.tools import raises
 
 
+def highlight_callback(query_string):
+    elastic_highlight_query = {
+        'pre_tags': ['<span class=\"es-highlight\">'],
+        'post_tags': ['</span>'],
+        'fields': {
+            'name': {'number_of_fragments': 0},
+            'description': {'number_of_fragments': 0}
+        }
+    }
+
+    if query_string:
+        for key in elastic_highlight_query['fields']:
+            elastic_highlight_query['fields'][key]['highlight_query'] = {'query_string': query_string}
+        return elastic_highlight_query
+
+
 DOMAIN = {
     'items': {
         'schema': {
@@ -72,14 +88,7 @@ DOMAIN = {
             'default_sort': [('firstcreated', -1)],
             'elastic_filter': {'exists': {'field': 'description'}},
             'aggregations': {'type': {'terms': {'field': 'name'}}},
-            'es_highlight': {
-                                'pre_tags': ['<span class=\"es-highlight\">'],
-                                'post_tags': ['</span>'],
-                                'fields': {
-                                    'name': {'number_of_fragments': 0},
-                                    'description': {'number_of_fragments': 0}
-                                }
-            }
+            'es_highlight': highlight_callback
         }
     },
     'items_with_callback_filter': {
