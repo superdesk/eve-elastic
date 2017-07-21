@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+2.2 (2017-07-21)
+++++++++++++++++
+
+- add `ELASTICSEARCH_RETRY_ON_CONFLICT` setting
+
 2.1 (2017-03-27)
 ++++++++++++++++
 
