@@ -10,7 +10,10 @@ from flask import json
 from eve.utils import config, ParsedRequest, parse_request
 from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es, generate_index_name
 from nose.tools import raises
-from unittest.mock import MagicMock
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
 
 
 def highlight_callback(query_string):
