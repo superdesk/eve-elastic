@@ -561,6 +561,8 @@ class Elastic(DataLayer):
     def update(self, resource, id_, updates):
         """Update document in index."""
         args = self._es_args(resource, refresh=True)
+        if self._get_retry_on_conflict():
+            args['retry_on_conflict'] = self._get_retry_on_conflict()
         updates.pop('_id', None)
         updates.pop('_type', None)
         return self.elastic(resource).update(id=id_, body={'doc': updates}, **args)
@@ -697,6 +699,10 @@ class Elastic(DataLayer):
             self.elastics[px] = get_es(url, **self.kwargs)
 
         return self.elastics[px]
+
+    def _get_retry_on_conflict(self):
+        """ Get the retry on settings"""
+        return self.app.config.get('ELASTICSEARCH_RETRY_ON_CONFLICT', 5)
 
 
 def build_elastic_query(doc):

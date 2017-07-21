@@ -10,6 +10,10 @@ from flask import json
 from eve.utils import config, ParsedRequest, parse_request
 from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es, generate_index_name
 from nose.tools import raises
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
 
 
 def highlight_callback(query_string):
@@ -669,6 +673,29 @@ class TestElastic(TestCase):
             self.app.data.insert('items_foo', [{'uri': 'foo'}, {'uri': 'bar'}])
             foo_items = self.app.data.find('items_foo', ParsedRequest(), None)
             self.assertEqual(2, foo_items.count())
+
+    def test_retry_on_conflict(self):
+        with self.app.app_context():
+            original_method = self.app.data.elastic('items').update
+            update_mock = MagicMock()
+            self.app.data.elastic('items').update = update_mock
+
+            self.app.data.update('items', 'foo', {'uri': 'bar', '_id': 'foo', '_type': 'items'})
+            self.assertEqual(update_mock.call_count, 1)
+            self.assertIn('retry_on_conflict', update_mock.call_args[1])
+            self.assertEqual(update_mock.call_args[1]['retry_on_conflict'], 5)
+
+            self.app.config['ELASTICSEARCH_RETRY_ON_CONFLICT'] = 1
+            self.app.data.update('items', 'foo', {'uri': 'bar', '_id': 'foo', '_type': 'items'})
+            self.assertEqual(update_mock.call_count, 2)
+            self.assertIn('retry_on_conflict', update_mock.call_args[1])
+            self.assertEqual(update_mock.call_args[1]['retry_on_conflict'], 1)
+
+            self.app.config['ELASTICSEARCH_RETRY_ON_CONFLICT'] = None
+            self.app.data.update('items', 'foo', {'uri': 'bar', '_id': 'foo', '_type': 'items'})
+            self.assertEqual(update_mock.call_count, 3)
+            self.assertNotIn('retry_on_conflict', update_mock.call_args[1])
+            self.app.data.elastic('items').update = original_method
 
 
 class TestElasticSearchWithSettings(TestCase):
