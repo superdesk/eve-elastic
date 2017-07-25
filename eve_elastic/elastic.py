@@ -199,24 +199,52 @@ class Elastic(DataLayer):
 
     def init_index(self, app=None):
         """Create indexes and put mapping."""
-        indexes = set()
+        elasticindexes = self._get_indexes()
+
+        for index, settings in elasticindexes.items():
+            es = settings['resource']
+            if not es.indices.exists(index):
+                self.create_index(index, settings.get('index_settings'), es)
+                continue
+            else:
+                self.put_settings(app, index, settings.get('index_settings').get('settings'), es)
+
+            for mapping_type, mappings in settings.get('index_settings', {}).get('mappings').items():
+                self._put_resource_mapping(mapping_type, es,
+                                           properties=mappings,
+                                           index=index, doc_type=mapping_type)
+        return
+
+    def _get_indexes(self):
+        """Based on the resource definition calculates the index definition"""
+        indexes = {}
         for resource in self._get_elastic_resources():
             try:
                 index = self._resource_index(resource)
+
             except KeyError:  # ignore missing
                 continue
 
-            es = self.elastic(resource)
-
             if index not in indexes:
-                indexes.add(index)
-                settings = self._resource_config(resource, 'SETTINGS')
-                if not es.indices.exists(index):
-                    self.create_index(index, settings, es)
-                else:
-                    self.put_settings(app, index, settings, es)
+                indexes.update({
+                    index: {
+                        'resource': self.elastic(resource),
+                        'index_settings': {
+                            'mappings': {}
+                        }
+                    }
+                })
 
-            self._put_resource_mapping(resource, es)
+                settings = self._resource_config(resource, 'SETTINGS')
+                if settings:
+                    indexes[index]['index_settings'].update(settings)
+
+            resource_config = self.app.config['DOMAIN'][resource]
+            properties = self._get_mapping_properties(resource_config, parent=self._get_parent_type(resource))
+            datasource = self.get_datasource(resource)
+            indexes[index]['index_settings']['mappings'][datasource[0]] = properties
+
+        return indexes
 
     def get_datasource(self, resource):
         if hasattr(self, '_datasource'):
@@ -285,11 +313,14 @@ class Elastic(DataLayer):
             elastic_resources[resource] = resource_config
         return elastic_resources
 
-    def _put_resource_mapping(self, resource, es, force_index=None):
-        resource_config = self.app.config['DOMAIN'][resource]
-        properties = self._get_mapping_properties(resource_config)
+    def _put_resource_mapping(self, resource, es, force_index=None, properties=None, **kwargs):
+        if not properties:
+            resource_config = self.app.config['DOMAIN'][resource]
+            properties = self._get_mapping_properties(resource_config, parent=self._get_parent_type(resource))
 
-        kwargs = self._es_args(resource)
+        if not kwargs:
+            kwargs = self._es_args(resource)
+
         kwargs['body'] = properties
 
         if force_index:
@@ -303,12 +334,19 @@ class Elastic(DataLayer):
         except elasticsearch.exceptions.RequestError:
             logger.exception('mapping error, updating settings resource=%s' % resource)
 
-    def _get_mapping_properties(self, resource_config):
+    def _get_mapping_properties(self, resource_config, parent=None):
         properties = self._get_mapping(resource_config['schema'])
         properties['properties'].update({
             config.DATE_CREATED: self._get_field_mapping({'type': 'datetime'}),
             config.LAST_UPDATED: self._get_field_mapping({'type': 'datetime'}),
         })
+
+        if parent:
+            properties.update({
+                '_parent': {
+                    'type': parent.get('type')
+                }
+            })
 
         properties['properties'].pop('_id', None)
         return properties
@@ -498,25 +536,10 @@ class Elastic(DataLayer):
     def find_one(self, resource, req, **lookup):
         """Find single document, if there is _id in lookup use that, otherwise filter."""
 
-        def is_found(hit):
-            if 'exists' in hit:
-                hit['found'] = hit['exists']
-            return hit.get('found', False)
-
-        args = self._es_args(resource)
-
         if config.ID_FIELD in lookup:
-            try:
-                hit = self.elastic(resource).get(id=lookup[config.ID_FIELD], **args)
-            except elasticsearch.NotFoundError:
-                return
-
-            if not is_found(hit):
-                return
-
-            docs = self._parse_hits({'hits': {'hits': [hit]}}, resource)
-            return docs.first()
+            return self._find_by_id(resource=resource, _id=lookup[config.ID_FIELD], parent=lookup.get('parent'))
         else:
+            args = self._es_args(resource)
             filters = [{'term': {key: val}} for key, val in lookup.items()]
             query = {'query': {'constant_score': {'filter': {'and': filters}}}}
 
@@ -528,22 +551,59 @@ class Elastic(DataLayer):
             except elasticsearch.NotFoundError:
                 return
 
+    def _find_by_id(self, resource, _id, parent=None):
+        """Find the document by Id. If parent is not provided then on
+        routing exception try to find using search.
+        """
+        def is_found(hit):
+            if 'exists' in hit:
+                hit['found'] = hit['exists']
+            return hit.get('found', False)
+
+        args = self._es_args(resource)
+        try:
+            # set the parent if available
+            if parent:
+                args['parent'] = parent
+
+            hit = self.elastic(resource).get(id=_id, **args)
+
+            if not is_found(hit):
+                return
+
+            docs = self._parse_hits({'hits': {'hits': [hit]}}, resource)
+            return docs.first()
+
+        except elasticsearch.NotFoundError:
+            return
+        except elasticsearch.TransportError as tex:
+            if tex.error == 'routing_missing_exception' or 'RoutingMissingException' in tex.error:
+                # search for the item
+                args = self._es_args(resource)
+                query = {'query': {'bool': {'must': [{'term': {'_id': _id}}]}}}
+                try:
+                    args['size'] = 1
+                    hits = self.elastic(resource).search(body=query, **args)
+                    docs = self._parse_hits(hits, resource)
+                    return docs.first()
+                except elasticsearch.NotFoundError:
+                    return
+
     def find_one_raw(self, resource, _id):
         """Find document by id."""
-        args = self._es_args(resource)
-        hit = self.elastic(resource).get(id=_id, **args)
-        return self._parse_hits({'hits': {'hits': [hit]}}, resource).first()
+        return self._find_by_id(resource=resource, _id=_id)
 
     def find_list_of_ids(self, resource, ids, client_projection=None):
         """Find documents by ids."""
         args = self._es_args(resource)
-        return self._parse_hits(self.elastic(resource).multi_get(ids, **args), resource)
+        return self._parse_hits(self.elastic(resource).mget(body={'ids': ids}, **args), resource)
 
     def insert(self, resource, doc_or_docs, **kwargs):
         """Insert document, it must be new if there is ``_id`` in it."""
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
+            self._update_parent_args(resource, kwargs, doc)
             _id = doc.pop('_id', None)
             res = self.elastic(resource).index(body=doc, id=_id, **kwargs)
             doc.setdefault('_id', res.get('_id', _id))
@@ -554,6 +614,12 @@ class Elastic(DataLayer):
     def bulk_insert(self, resource, docs, **kwargs):
         """Bulk insert documents."""
         kwargs.update(self._es_args(resource))
+        parent_type = self._get_parent_type(resource)
+        if parent_type:
+            for doc in docs:
+                if doc.get(parent_type.get('field')):
+                    doc['_parent'] = doc.get(parent_type.get('field'))
+
         res = bulk(self.elastic(resource), docs, stats_only=False, **kwargs)
         self._refresh_resource_index(resource)
         return res
@@ -563,8 +629,10 @@ class Elastic(DataLayer):
         args = self._es_args(resource, refresh=True)
         if self._get_retry_on_conflict():
             args['retry_on_conflict'] = self._get_retry_on_conflict()
+
         updates.pop('_id', None)
         updates.pop('_type', None)
+        self._update_parent_args(resource, args, updates)
         return self.elastic(resource).update(id=id_, body={'doc': updates}, **args)
 
     def replace(self, resource, id_, document):
@@ -572,15 +640,20 @@ class Elastic(DataLayer):
         args = self._es_args(resource, refresh=True)
         document.pop('_id', None)
         document.pop('_type', None)
+        self._update_parent_args(resource, args, document)
         return self.elastic(resource).index(body=document, id=id_, **args)
 
-    def remove(self, resource, lookup=None):
+    def remove(self, resource, lookup=None, parent=None):
         """Remove docs for resource.
 
         :param resource: resource name
         :param lookup: filter
+        :param parent: parent id
         """
         args = self._es_args(resource)
+        if parent:
+            args['parent'] = parent
+
         if lookup:
             if lookup.get('_id'):
                 try:
@@ -642,7 +715,30 @@ class Elastic(DataLayer):
             args['_source'] = source_projections
         if refresh:
             args['refresh'] = refresh
+
         return args
+
+    def _get_parent_type(self, resource):
+        resource_config = self.app.config['DOMAIN'][resource] or {}
+        return resource_config.get('datasource', {}).get('elastic_parent', {})
+
+    def get_parent_id(self, resource, document):
+        """Get the Parent Id of the document
+
+        :param resource: resource name
+        :param document: document containing the parent id
+        """
+        parent_type = self._get_parent_type(resource)
+        if parent_type and document:
+            return document.get(parent_type.get('field'))
+
+        return None
+
+    def _update_parent_args(self, resource, args, document):
+        parent_type = self._get_parent_type(resource)
+        parent = self.get_parent_id(resource, document)
+        if parent_type and parent:
+            args['parent'] = parent
 
     def _fields(self, resource):
         """Get projection fields for given resource."""
