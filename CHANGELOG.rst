@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+2.3 (2017-07-27)
+++++++++++++++++
+
+- add support for parent-child relations.
+
 2.2 (2017-07-21)
 ++++++++++++++++
 
