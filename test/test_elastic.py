@@ -827,3 +827,241 @@ class TestElasticSearchWithSettings(TestCase):
 
         es = get_es('http://localhost:9200', serializer=TestSerializer())
         self.assertIsInstance(es.transport.serializer, TestSerializer)
+
+
+class TestElasticSearchParentChild(TestCase):
+    index_name = 'elastic_index'
+    parent_item = 'items'
+    child_item = 'child_items'
+    version_2x = False
+
+    domain = {
+        'items': {
+            'schema': {
+                'name': {'type': 'string'},
+                'headline': {'type': 'string'}
+            },
+            'datasource': {
+                'backend': 'elastic'
+            }
+        },
+        'child_items': {
+            'schema': {
+                'headline': {'type': 'string'},
+                'name': {'type': 'string'},
+                'item_id': {'type': 'string'}
+            },
+            'datasource': {
+                'backend': 'elastic',
+                'elastic_parent': {
+                    'type': 'items',
+                    'field': 'item_id'
+                }
+            }
+        }
+    }
+
+    def setUp(self):
+        settings = {
+            'DOMAIN': self.domain,
+            'ELASTICSEARCH_URL': 'http://localhost:9200',
+            'ELASTICSEARCH_INDEX': self.index_name,
+            'ELASTICSEARCH_SETTINGS': ELASTICSEARCH_SETTINGS
+        }
+
+        self.app = eve.Eve(settings=settings, data=Elastic)
+        with self.app.app_context():
+            self.app.data.init_index(self.app)
+            for resource in self.app.config['DOMAIN']:
+                self.app.data.remove(resource)
+
+            self.es = get_es(self.app.config.get('ELASTICSEARCH_URL'))
+            self.checkVersion()
+
+    def tearDown(self):
+        with self.app.app_context():
+            get_indices(self.es).delete(self.index_name)
+
+    def checkVersion(self):
+        with self.app.app_context():
+            info = self.es.info()
+            self.version_2x = info.get('version', {}).get('number', '').startswith('2')
+
+    def test_child_items_mapping(self):
+        with self.app.app_context():
+            mapping = self.es.indices.get_mapping(index=self.index_name, doc_type='child_items')
+            for key, value in mapping.items():
+                self.assertIn('child_items', value.get('mappings'))
+                self.assertDictEqual(value.get('mappings').get('child_items').get('_parent'), {'type': 'items'})
+                self.assertDictEqual(value.get('mappings').get('child_items').get('_routing'), {'required': True})
+
+    def test_insert_child_item(self):
+        with self.app.app_context():
+            self.app.data.insert(self.parent_item, [{'_id': 'foo', 'name': 'foo', 'headline': 'test'}])
+            self.app.data.insert(self.child_item, [
+                {'_id': 'childfoo', 'name': 'childfoo', 'item_id': 'foo', 'headline': 'test'}
+            ])
+
+            parent = self.app.data.find_one(self.parent_item, req=None, _id='foo')
+            self.assertEqual(parent['_id'], 'foo')
+            self.assertEqual(parent['name'], 'foo')
+            child = self.app.data.find_one(self.child_item, req=None, _id='childfoo', parent='foo')
+            self.assertEqual(child['_id'], 'childfoo')
+            self.assertEqual(child['name'], 'childfoo')
+            self.assertEqual(child['item_id'], 'foo')
+
+            # without parent
+            child = self.app.data.find_one(self.child_item, req=None, _id='childfoo')
+            self.assertEqual(child['_id'], 'childfoo')
+            self.assertEqual(child['name'], 'childfoo')
+            self.assertEqual(child['item_id'], 'foo')
+
+    def test_insert_child_item_with_no_parent(self):
+        with self.app.app_context():
+            self.app.data.insert(self.child_item, [
+                {'_id': 'childfoo', 'name': 'childfoo', 'item_id': 'test', 'headline': 'test'}
+            ])
+
+            child = self.app.data.find_one(self.child_item, req=None, _id='childfoo', parent='test')
+            self.assertEqual(child['_id'], 'childfoo')
+            self.assertEqual(child['name'], 'childfoo')
+            self.assertEqual(child['item_id'], 'test')
+
+    def test_update_child_item(self):
+        with self.app.app_context():
+            self.app.data.insert(self.parent_item, [{'_id': 'foo', 'name': 'foo', 'headline': 'test'}])
+            self.app.data.insert(self.child_item, [
+                {'_id': 'childfoo', 'name': 'childfoo', 'item_id': 'foo', 'headline': 'test'}
+            ])
+
+            child = self.app.data.find_one(self.child_item, req=None, _id='childfoo', parent='foo')
+
+            self.assertEqual(child['_id'], 'childfoo')
+            self.assertEqual(child['name'], 'childfoo')
+            self.assertEqual(child['item_id'], 'foo')
+            self.assertEqual(child['headline'], 'test')
+
+            self.app.data.update(self.child_item,
+                                 id_='childfoo',
+                                 updates={'_id': 'childfoo', 'name': 'test',
+                                          'item_id': 'foo', 'headline': 'test test'})
+
+            child = self.app.data.find_one(self.child_item, req=None, _id='childfoo', parent='foo')
+            self.assertEqual(child['_id'], 'childfoo')
+            self.assertEqual(child['name'], 'test')
+            self.assertEqual(child['item_id'], 'foo')
+            self.assertEqual(child['headline'], 'test test')
+
+    def test_update_child_item_with_no_parent_raises_exception(self):
+        with self.app.app_context():
+            self.app.data.insert(self.parent_item, [{'_id': 'foo', 'name': 'foo', 'headline': 'test'}])
+            self.app.data.insert(self.child_item, [
+                {'_id': 'childfoo', 'name': 'childfoo', 'item_id': 'foo', 'headline': 'test'}
+            ])
+
+            with self.assertRaises(elasticsearch.TransportError) as cm:
+                self.app.data.update(self.child_item,
+                                     id_='childfoo',
+                                     updates={'_id': 'childfoo', 'name': 'test', 'headline': 'test test'})
+
+            self.assertEqual(cm.exception.status_code, 400)
+            if self.version_2x:
+                self.assertEqual(cm.exception.error, 'routing_missing_exception')
+            else:
+                self.assertIn('RoutingMissingException', cm.exception.error)
+
+    def test_update_child_item_and_change_parent_raises_exception(self):
+        with self.app.app_context():
+            self.app.data.insert(self.parent_item, [{'_id': 'foo', 'name': 'foo', 'headline': 'test'}])
+            self.app.data.insert(self.child_item, [
+                {'_id': 'childfoo', 'name': 'childfoo', 'item_id': 'foo', 'headline': 'test'}
+            ])
+
+            with self.assertRaises(elasticsearch.TransportError) as cm:
+                self.app.data.update(self.child_item,
+                                     id_='childfoo',
+                                     updates={'_id': 'childfoo',
+                                              'name': 'test',
+                                              'headline': 'test test',
+                                              'item_id': 'helloworld'
+                                              })
+
+            self.assertEqual(cm.exception.status_code, 404)
+            if self.version_2x:
+                self.assertEqual(cm.exception.error, 'document_missing_exception')
+            else:
+                self.assertIn('DocumentMissingException', cm.exception.error)
+
+    def test_bulk_insert_child_items(self):
+        with self.app.app_context():
+            (count, _errors) = self.app.data.bulk_insert(self.child_item, [
+                {'_id': 'u1', 'name': 'foo', 'item_id': 'item1'},
+                {'_id': 'u2', 'name': 'foo', 'item_id': 'item2'},
+                {'_id': 'u3', 'name': 'foo', 'item_id': 'item3'},
+            ])
+            self.assertEquals(3, count)
+            self.assertEquals(0, len(_errors))
+
+    def test_replace_child_item(self):
+        with self.app.app_context():
+            res = self.app.data.insert(self.child_item, [{'_id': 'foo', 'name': 'testing', 'item_id': 'test'}])
+            self.assertEqual(1, len(res))
+            new_item = {'name': 'bar', 'item_id': 'test'}
+            res = self.app.data.replace(self.child_item, 'foo', new_item)
+            self.assertEqual(2, res['_version'])
+
+    def test_replace_child_item_with_no_parent_raises_exception(self):
+        with self.app.app_context():
+            res = self.app.data.insert(self.child_item, [{'_id': 'foo', 'name': 'testing', 'item_id': 'test'}])
+            self.assertEqual(1, len(res))
+            with self.assertRaises(elasticsearch.TransportError) as cm:
+                new_item = {'name': 'bar'}
+                res = self.app.data.replace(self.child_item, 'foo', new_item)
+
+            self.assertEqual(cm.exception.status_code, 400)
+            if self.version_2x:
+                self.assertEqual(cm.exception.error, 'routing_missing_exception')
+            else:
+                self.assertIn('RoutingMissingException', cm.exception.error)
+
+    def test_parent_child_query(self):
+        with self.app.app_context():
+            self.app.data.insert(self.parent_item, [
+                {'_id': 'foo', 'name': 'foo', 'headline': 'test'},
+                {'_id': 'bar', 'name': 'bar', 'headline': 'test'}
+            ])
+            self.app.data.insert(self.child_item, [
+                {'_id': 'child1', 'name': 'child1', 'item_id': 'foo', 'headline': 'test'},
+                {'_id': 'child2', 'name': 'child2', 'item_id': 'bar', 'headline': 'test'}
+            ])
+
+            query = {
+                'query': {
+                    'bool': {
+                        'must': {
+                            'has_child': {
+                                'type': self.child_item,
+                                'query': {
+                                    'match': {'name': 'child1'}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query)}
+            results = self.app.data.find(self.parent_item, req, None)
+            self.assertEqual(1, results.count())
+            self.assertEqual(results[0].get('_id'), 'foo')
+            self.assertEqual(results[0].get('_type'), self.parent_item)
+
+    def test_remove_child(self):
+        with self.app.app_context():
+            self.app.data.insert(self.parent_item, [{'_id': 'foo', 'name': 'foo', 'headline': 'test'}])
+            self.app.data.insert(self.child_item, [
+                {'_id': 'childfoo', 'name': 'childfoo', 'item_id': 'foo', 'headline': 'test'}
+            ])
+            self.app.data.remove(self.child_item, {'_id': 'childfoo'}, 'foo')
+            child = self.app.data.find_one(self.child_item, req=None, _id='childfoo', parent='foo')
+            self.assertIsNone(child)
