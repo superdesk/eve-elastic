@@ -643,21 +643,21 @@ class Elastic(DataLayer):
         self._update_parent_args(resource, args, document)
         return self.elastic(resource).index(body=document, id=id_, **args)
 
-    def remove(self, resource, lookup=None, parent=None):
+    def remove(self, resource, lookup=None, parent=None, **kwargs):
         """Remove docs for resource.
 
         :param resource: resource name
         :param lookup: filter
         :param parent: parent id
         """
-        args = self._es_args(resource)
+        kwargs.update(self._es_args(resource))
         if parent:
-            args['parent'] = parent
+            kwargs['parent'] = parent
 
         if lookup:
             if lookup.get('_id'):
                 try:
-                    return self.elastic(resource).delete(id=lookup.get('_id'), refresh=True, **args)
+                    return self.elastic(resource).delete(id=lookup.get('_id'), refresh=True, **kwargs)
                 except elasticsearch.NotFoundError:
                     return
         return ValueError('there must be `lookup._id` specified')
