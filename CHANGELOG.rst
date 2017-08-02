@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+2.4 (2017-08-02)
+++++++++++++++++
+
+- add support for kwargs to ``remove`` (by Luis Fernando Gomes)
+
 2.3 (2017-07-27)
 ++++++++++++++++
 
