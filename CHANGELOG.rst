@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+2.4.1 (2018-02-13)
+++++++++++++++++++
+
+- avoid closing/opening index on put_settings if settings are already set
+
 2.4 (2017-08-02)
 ++++++++++++++++
 
