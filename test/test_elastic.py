@@ -10,10 +10,8 @@ from flask import json
 from eve.utils import config, ParsedRequest, parse_request
 from eve_elastic.elastic import parse_date, Elastic, get_indices, get_es, generate_index_name
 from nose.tools import raises
-try:
-    from unittest.mock import MagicMock
-except ImportError:
-    from mock import MagicMock
+
+from unittest.mock import MagicMock, patch
 
 
 def highlight_callback(query_string):
@@ -785,6 +783,12 @@ class TestElasticSearchWithSettings(TestCase):
                 }
             }, analyzer)
 
+    def test_put_settings_with_no_changes_existing_settings(self):
+        with self.app.app_context():
+            with patch.object(self.app.data.es.indices, 'close', side_effect=KeyError) as indices_close:
+                self.app.data.put_settings(self.app, self.index_name, ELASTICSEARCH_SETTINGS)
+            indices_close.assert_not_called()
+
     def test_put_settings_existing_index(self):
         with self.app.app_context():
             self.app.config['DOMAIN']['items']['schema']['slugline'] = {
@@ -810,12 +814,9 @@ class TestElasticSearchWithSettings(TestCase):
 
             self.app.config['ELASTICSEARCH_SETTINGS'] = new_settings
 
-            if hasattr(self, 'assertLogs'):
-                with self.assertLogs('elastic') as log:
-                    self.app.data.put_mapping(self.app)
-                    self.assertIn('ERROR:elastic:mapping error, updating settings resource=items', log.output[0])
-            else:
+            with self.assertLogs('elastic') as log:
                 self.app.data.put_mapping(self.app)
+                self.assertIn('ERROR:elastic:mapping error, updating settings resource=items', log.output[0])
 
     def test_cluster(self):
         es = get_es(['http://localhost:9200', 'http://localhost:9200'])

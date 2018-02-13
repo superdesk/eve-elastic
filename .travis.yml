@@ -23,22 +23,6 @@ matrix:
                   packages:
                       - elasticsearch
 
-        - env: ELASTIC=2X
-          python: "3.4"
-          addons:
-              apt:
-                  sources:
-                      - elasticsearch-2.x
-                  packages:
-                      - elasticsearch
-
-        - env: ELASTIC=2X
-          python: "2.7"
-          addons:
-              apt:
-                  sources:
-                      - elasticsearch-2.x
-                  packages:
                       - elasticsearch
 
         - env: ELASTIC=17
