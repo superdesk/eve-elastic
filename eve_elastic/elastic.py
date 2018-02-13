@@ -60,6 +60,20 @@ def format_doc(hit, schema, dates):
     return doc
 
 
+def test_settings_contain(current_settings, new_settings):
+    """Test if current settings contain everything from new settings."""
+    try:
+        for key, val in new_settings.items():
+            if isinstance(val, dict):
+                if not test_settings_contain(current_settings[key], val):
+                    return False
+            elif val != current_settings[key]:
+                return False
+        return True
+    except KeyError:
+        return False
+
+
 def noop():
     pass
 
@@ -497,7 +511,7 @@ class Elastic(DataLayer):
         try:
             return self.app.config.get('ELASTICSEARCH_AUTO_AGGREGATIONS') or \
                    bool(req.args and int(req.args.get('aggregations')))
-        except:
+        except (AttributeError, TypeError):
             return False
 
     def should_highlight(self, req):
@@ -508,7 +522,7 @@ class Elastic(DataLayer):
         """
         try:
             return bool(req.args and int(req.args.get('es_highlight', 0)))
-        except:
+        except (AttributeError, TypeError):
             return False
 
     def should_project(self, req):
@@ -519,7 +533,7 @@ class Elastic(DataLayer):
         """
         try:
             return req.args and json.loads(req.args.get('projections', []))
-        except:
+        except (AttributeError, TypeError):
             return False
 
     def get_projected_fields(self, req):
@@ -530,7 +544,7 @@ class Elastic(DataLayer):
         try:
             args = getattr(req, 'args', {})
             return ','.join(json.loads(args.get('projections')))
-        except:
+        except (AttributeError, TypeError):
             return None
 
     def find_one(self, resource, req, **lookup):
@@ -687,6 +701,13 @@ class Elastic(DataLayer):
 
         if not settings:
             return
+
+        for alias, old_settings in self.es.indices.get_settings(index=index).items():
+            try:
+                if test_settings_contain(old_settings['settings']['index'], settings['settings']):
+                    return
+            except KeyError:
+                pass
 
         es.indices.close(index=index)
         es.indices.put_settings(index=index, body=settings)
