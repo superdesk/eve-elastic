@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+2.4.2 (2018-08-06)
+++++++++++++++++++
+
+- fix install issue with ciso9601 dependency (by Luis Fernando Gomes)
+
 2.4.1 (2018-02-13)
 ++++++++++++++++++
 
