@@ -53,6 +53,13 @@ def format_doc(hit, schema, dates):
     if hit.get('highlight'):
         doc['es_highlight'] = hit.get('highlight')
 
+    if hit.get('inner_hits'):
+        doc['_inner_hits'] = {}
+        for key, value in hit.get('inner_hits').items():
+            doc['_inner_hits'][key] = []
+            for item in value.get('hits', {}).get('hits', []):
+                doc['_inner_hits'][key].append(item.get('_source', {}))
+
     for key in dates:
         if key in doc:
             doc[key] = parse_date(doc[key])
