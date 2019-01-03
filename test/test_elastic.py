@@ -1066,3 +1066,103 @@ class TestElasticSearchParentChild(TestCase):
             self.app.data.remove(self.child_item, {'_id': 'childfoo'}, 'foo')
             child = self.app.data.find_one(self.child_item, req=None, _id='childfoo', parent='foo')
             self.assertIsNone(child)
+
+
+class TestElasticInnerHits(TestCase):
+    index_name = 'elastic_innerhits'
+    data = [
+        {
+            '_id': 'foo',
+            'name': 'foo',
+            'headline': 'foo test',
+            'service': [
+                {'code': 'a', 'name': 'a'},
+                {'code': 'b', 'name': 'b'}
+            ]
+        },
+        {
+            '_id': 'bar',
+            'name': 'bar',
+            'headline': 'bar test',
+            'service': [
+                {'code': 'a', 'name': 'a'},
+                {'code': 'c', 'name': 'c'}
+            ]
+        }
+    ]
+
+    domain = {
+        'items': {
+            'schema': {
+                'name': {'type': 'string'},
+                'headline': {'type': 'string'},
+                'service': {
+                    'type': 'object',
+                    'mapping': {
+                        'type': 'nested',
+                        'properties': {
+                            'code': {'type': 'string', 'index': 'not_analyzed'},
+                            'name': {'type': 'string', 'index': 'not_analyzed'}
+                        },
+                    },
+                }
+            },
+            'datasource': {
+                'backend': 'elastic'
+            }
+        }
+    }
+
+    def setUp(self):
+        settings = {
+            'DOMAIN': self.domain,
+            'ELASTICSEARCH_URL': 'http://localhost:9200',
+            'ELASTICSEARCH_INDEX': self.index_name,
+            'ELASTICSEARCH_SETTINGS': ELASTICSEARCH_SETTINGS
+        }
+
+        self.app = eve.Eve(settings=settings, data=Elastic)
+        with self.app.app_context():
+            self.app.data.init_index(self.app)
+            for resource in self.app.config['DOMAIN']:
+                self.app.data.remove(resource)
+
+            self.es = get_es(self.app.config.get('ELASTICSEARCH_URL'))
+
+    def tearDown(self):
+        with self.app.app_context():
+            get_indices(self.es).delete(self.index_name)
+
+    def test_inner_hits_query(self):
+        with self.app.app_context():
+            self.app.data.insert('items', self.data)
+            query = {
+                'query': {
+                    'bool': {
+                        'must': [
+                            {
+                                'nested': {
+                                    'path': 'service',
+                                    'inner_hits': {},
+                                    'query': {
+                                        'bool': {
+                                            'must': [
+                                                {'term': {'service.code': 'a'}}
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+            req = ParsedRequest()
+            req.args = {'source': json.dumps(query)}
+            results = self.app.data.find('items', req, None)
+            self.assertEqual(2, results.count())
+            self.assertEqual(results[0].get('_id'), 'foo')
+            self.assertEqual(len(results[0].get('_inner_hits')), 1)
+            self.assertEqual(results[0].get('_inner_hits')['service'][0]['code'], 'a')
+            self.assertEqual(results[1].get('_id'), 'bar')
+            self.assertEqual(results[1].get('_inner_hits')['service'][0]['code'], 'a')
