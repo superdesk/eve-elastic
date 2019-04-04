@@ -1,0 +1,4 @@
+elastic:
+    image: elasticsearch:5
+    ports:
+        - "9200:9200"

@@ -138,14 +138,9 @@ def set_filters(query, base_filters):
     :param base_filters: all filters set outside of query (eg. resource config, sub_resource_lookup)
     """
     filters = [f for f in base_filters if f is not None]
-    query_filter = query['query']['filtered'].get('filter', None)
-    if query_filter is not None:
-        if 'and' in query_filter:
-            filters.extend(query_filter['and'])
-        else:
-            filters.append(query_filter)
     if filters:
-        query['query']['filtered']['filter'] = {'and': filters}
+        query['query']['bool'].setdefault('must', [])
+        query['query']['bool']['must'].extend(filters)
 
 
 def set_sort(query, sort):
@@ -277,7 +272,9 @@ class Elastic(DataLayer):
         elif schema['type'] == 'datetime':
             return {'type': 'date'}
         elif schema['type'] == 'string' and schema.get('unique'):
-            return {'type': 'string', 'index': 'not_analyzed'}
+            return {'type': 'keyword'}
+        elif schema['type'] == 'string':
+            return {'type': 'text'}
 
     def create_index(self, index=None, settings=None, es=None):
         """Create new index and ignore if it exists already."""
@@ -414,24 +411,25 @@ class Elastic(DataLayer):
 
         if args.get('source'):
             query = json.loads(args.get('source'))
-            if 'filtered' not in query.get('query', {}):
+            if 'bool' not in query.get('query', {}):
                 _query = query.get('query')
-                query['query'] = {'filtered': {}}
+                query['query'] = {'bool': {}}
                 if _query:
-                    query['query']['filtered']['query'] = _query
+                    query['query']['bool']['must'] = [_query]
         else:
-            query = {'query': {'filtered': {}}}
+            query = {'query': {'bool': {}}}
 
         if args.get('q', None):
-            query['query']['filtered']['query'] = _build_query_string(args.get('q'),
+            query['query']['bool'].setdefault('must', [])
+            query['query']['bool']['must'].append(_build_query_string(args.get('q'),
                                                                       default_field=args.get('df', '_all'),
-                                                                      default_operator=args.get('default_operator', 'OR'))
+                                                                      default_operator=args.get('default_operator', 'OR')))
 
         if 'sort' not in query:
             if req.sort:
                 sort = ast.literal_eval(req.sort)
                 set_sort(query, sort)
-            elif self._default_sort(resource) and 'query' not in query['query']['filtered']:
+            elif self._default_sort(resource):
                 set_sort(query, self._default_sort(resource))
 
         if req.max_results:
@@ -443,8 +441,8 @@ class Elastic(DataLayer):
         filters = []
         filters.append(source_config.get('elastic_filter'))
         filters.append(source_config.get('elastic_filter_callback', noop)())
-        filters.append({'and': _build_lookup_filter(sub_resource_lookup)} if sub_resource_lookup else None)
         filters.append(json.loads(args.get('filter')) if 'filter' in args else None)
+        filters.extend(_build_lookup_filter(sub_resource_lookup) if sub_resource_lookup else [])
         filters.extend(args.get('filters') if 'filters' in args else [])
 
         if req.where:
@@ -541,7 +539,7 @@ class Elastic(DataLayer):
         else:
             args = self._es_args(resource)
             filters = [{'term': {key: val}} for key, val in lookup.items()]
-            query = {'query': {'constant_score': {'filter': {'and': filters}}}}
+            query = {'query': {'bool': {'filter': filters}}}
 
             try:
                 args['size'] = 1
@@ -851,11 +849,11 @@ def build_elastic_query(doc):
                 It's the developer responsibility to pass right object.
     :returns ElasticSearch query
     """
-    elastic_query, filters = {"query": {"filtered": {}}}, []
+    elastic_query, filters = {"query": {"bool": {}}}, []
 
     for key in doc.keys():
         if key == 'q':
-            elastic_query['query']['filtered']['query'] = _build_query_string(doc['q'])
+            elastic_query['query']['bool']['must'] = [_build_query_string(doc['q'])]
         else:
             _value = doc[key]
             filters.append({"terms": {key: _value}} if isinstance(_value, list) else {"term": {key: _value}})

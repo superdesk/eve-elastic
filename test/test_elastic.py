@@ -82,7 +82,7 @@ DOMAIN = {
     'items_with_description': {
         'schema': {
             'uri': {'type': 'string', 'unique': True},
-            'name': {'type': 'string'},
+            'name': {'type': 'string', 'mapping': {'type': 'keyword'}},
             'description': {'type': 'string'},
             'firstcreated': {'type': 'datetime'},
         },
@@ -106,7 +106,7 @@ DOMAIN = {
     },
     'items_foo': {
         'schema': {
-            'uri': {'type': 'string'},
+            'uri': {'type': 'string', 'unique': True},
             'firstcreated': {'type': 'datetime'},
         },
         'datasource': {
@@ -116,7 +116,7 @@ DOMAIN = {
     },
     'items_foo_default_index': {
         'schema': {
-            'uri': {'type': 'string'}
+            'uri': {'type': 'string', 'unique': True},
         },
         'datasource': {
             'source': 'items_foo',
@@ -424,7 +424,7 @@ class TestElastic(TestCase):
             self.app.data.insert('items_with_description', [{'uri': 'foo', 'description': 'test'}, {'uri': 'bar'}])
             req = ParsedRequest()
             req.args = {}
-            req.args['source'] = json.dumps({'query': {'filtered': {'filter': {'term': {'uri': 'bar'}}}}})
+            req.args['source'] = json.dumps({'query': {'bool': {'filter': {'term': {'uri': 'bar'}}}}})
             self.assertEqual(0, self.app.data.find('items_with_description', req, None).count())
 
     def test_where_filter(self):
@@ -540,10 +540,10 @@ class TestElastic(TestCase):
                 {'uri': 'baz'},
             ])
 
-            query = {'query': {'filtered': {'filter': {'and': [
+            query = {'query': {'bool': {'filter': [
                 {'term': {'uri': 'foo'}},
                 {'term': {'uri': 'bar'}},
-            ]}}}}
+            ]}}}
 
             req = ParsedRequest()
             req.args = {'source': json.dumps(query)}
