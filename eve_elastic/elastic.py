@@ -151,22 +151,18 @@ class ElasticCursor(object):
             response['_aggregations'] = self.hits['aggregations']
 
 
-def set_filters(query, base_filters):
+def set_filters(query, filters):
     """Put together all filters we have and set them as 'and' filter
     within filtered query.
 
     :param query: elastic query being constructed
     :param base_filters: all filters set outside of query (eg. resource config, sub_resource_lookup)
     """
-    filters = [f for f in base_filters if f is not None]
-    query_filter = query['query']['filtered'].get('filter', None)
-    if query_filter is not None:
-        if 'and' in query_filter:
-            filters.extend(query_filter['and'])
-        else:
-            filters.append(query_filter)
+    query['query'].setdefault('bool', {})
     if filters:
-        query['query']['filtered']['filter'] = {'and': filters}
+        for f in filters:
+            if f is not None:
+                query['query']['bool'].setdefault('must', []).append(f)
 
 
 def set_sort(query, sort):
@@ -233,7 +229,7 @@ class Elastic(DataLayer):
             for mapping_type, mappings in settings.get('index_settings', {}).get('mappings').items():
                 self._put_resource_mapping(mapping_type, es,
                                            properties=mappings,
-                                           index=index, doc_type=mapping_type)
+                                           index=index)
         return
 
     def _get_indexes(self):
@@ -298,7 +294,7 @@ class Elastic(DataLayer):
         elif schema['type'] == 'datetime':
             return {'type': 'date'}
         elif schema['type'] == 'string' and schema.get('unique'):
-            return {'type': 'string', 'index': 'not_analyzed'}
+            return {'type': 'keyword'}
 
     def create_index(self, index=None, settings=None, es=None):
         """Create new index and ignore if it exists already."""
@@ -341,7 +337,7 @@ class Elastic(DataLayer):
 
         if not kwargs:
             kwargs = self._es_args(resource)
-
+        
         kwargs['body'] = properties
 
         if force_index:
@@ -389,22 +385,24 @@ class Elastic(DataLayer):
             properties = self._get_mapping_properties(resource_config)
 
             kwargs = {
-                'index': index or self._resource_index(resource),
-                'doc_type': resource,
+                'index': self._resource_index(resource),
                 'body': properties,
             }
+
+            print('put', json.dumps(kwargs, indent=2))
 
             try:
                 self.elastic(resource).indices.put_mapping(**kwargs)
             except elasticsearch.exceptions.RequestError:
+                raise
                 logger.exception('mapping error, updating settings resource=%s' % resource)
 
-    def get_mapping(self, index, doc_type=None):
+    def get_mapping(self, index):
         """Get mapping for index.
 
         :param index: index name
         """
-        mapping = self.es.indices.get_mapping(index=index, doc_type=doc_type)
+        mapping = self.es.indices.get_mapping(index=index)
         return next(iter(mapping.values()))
 
     def get_settings(self, index):
@@ -435,24 +433,22 @@ class Elastic(DataLayer):
 
         if args.get('source'):
             query = json.loads(args.get('source'))
-            if 'filtered' not in query.get('query', {}):
-                _query = query.get('query')
-                query['query'] = {'filtered': {}}
-                if _query:
-                    query['query']['filtered']['query'] = _query
         else:
-            query = {'query': {'filtered': {}}}
+            query = {'query': {'bool': {}}}
 
         if args.get('q', None):
-            query['query']['filtered']['query'] = _build_query_string(args.get('q'),
-                                                                      default_field=args.get('df', '_all'),
-                                                                      default_operator=args.get('default_operator', 'OR'))
+            query['query']['bool'].setdefault('must', []).append(
+                _build_query_string(args.get('q'),
+                                    default_field=args.get('df', '_all'),
+                                    default_operator=args.get('default_operator', 'OR')
+                )
+            )
 
         if 'sort' not in query:
             if req.sort:
                 sort = ast.literal_eval(req.sort)
                 set_sort(query, sort)
-            elif self._default_sort(resource) and 'query' not in query['query']['filtered']:
+            elif self._default_sort(resource) and 'sort' not in query['query']:
                 set_sort(query, self._default_sort(resource))
 
         if req.max_results:
@@ -737,8 +733,8 @@ class Elastic(DataLayer):
         datasource = self.get_datasource(resource)
         args = {
             'index': self._resource_index(resource),
-            'doc_type': datasource[0],
         }
+
         if source_projections:
             args['_source'] = source_projections
         if refresh:
@@ -787,7 +783,7 @@ class Elastic(DataLayer):
         """
         datasource = self.get_datasource(resource)
         indexes = self._resource_config(resource, 'INDEXES') or {}
-        default_index = self._resource_config(resource, 'INDEX')
+        default_index = '{}_{}'.format(self._resource_config(resource, 'INDEX'), datasource[0])
         return indexes.get(datasource[0], default_index)
 
     def _refresh_resource_index(self, resource):
@@ -879,11 +875,11 @@ def build_elastic_query(doc):
                 It's the developer responsibility to pass right object.
     :returns ElasticSearch query
     """
-    elastic_query, filters = {"query": {"filtered": {}}}, []
+    elastic_query, filters = {'query': {'bool': {'must': []}}}, []
 
     for key in doc.keys():
         if key == 'q':
-            elastic_query['query']['filtered']['query'] = _build_query_string(doc['q'])
+            elastic_query['query']['bool']['must'].append(_build_query_string(doc['q']))
         else:
             _value = doc[key]
             filters.append({"terms": {key: _value}} if isinstance(_value, list) else {"term": {key: _value}})

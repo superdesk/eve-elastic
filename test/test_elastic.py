@@ -38,7 +38,7 @@ DOMAIN = {
             'firstcreated': {'type': 'datetime'},
             'category': {
                 'type': 'string',
-                'mapping': {'type': 'string', 'index': 'not_analyzed'}
+                'mapping': {'type': 'keyword'}
             },
             'dateline': {
                 'type': 'dict',
@@ -167,7 +167,7 @@ class TestElastic(TestCase):
         settings['FOO_URL'] = settings['ELASTICSEARCH_URL']
         settings['FOO_INDEX'] = 'foo'
         self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
-        self.drop_index(INDEX)
+        self.drop_index(INDEX + '_' + DOC_TYPE)
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
             self.app.data.init_index(self.app)
@@ -707,7 +707,7 @@ class TestElasticSearchWithSettings(TestCase):
                         'slugline': {
                             'type': 'string',
                             'mapping': {
-                                'type': 'string',
+                                'type': 'keyword',
                                 'fields': {
                                     'phrase': {
                                         'type': 'string',
@@ -794,10 +794,10 @@ class TestElasticSearchWithSettings(TestCase):
             self.app.config['DOMAIN']['items']['schema']['slugline'] = {
                 'type': 'string',
                 'mapping': {
-                    'type': 'string',
+                    'type': 'text',
                     'fields': {
                         'phrases': {
-                            'type': 'string',
+                            'type': 'text',
                             'analyzer': 'prefix_analyzer',
                             'search_analyzer': 'prefix_analyzer'
                         }
@@ -1101,8 +1101,8 @@ class TestElasticInnerHits(TestCase):
                     'mapping': {
                         'type': 'nested',
                         'properties': {
-                            'code': {'type': 'string', 'index': 'not_analyzed'},
-                            'name': {'type': 'string', 'index': 'not_analyzed'}
+                            'code': {'type': 'keyword'},
+                            'name': {'type': 'keyword'},
                         },
                     },
                 }
