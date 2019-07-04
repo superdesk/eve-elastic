@@ -1,47 +1,13 @@
 language: python
 
-sudo: required
-dist: trusty
+services:
+    - docker
 
-matrix:
-    include:
-        - env: ELASTIC=2X
-          python: "3.6"
-          addons:
-              apt:
-                  sources:
-                      - elasticsearch-2.x
-                  packages:
-                      - elasticsearch
-
-        - env: ELASTIC=2X
-          python: "3.5"
-          addons:
-              apt:
-                  sources:
-                      - elasticsearch-2.x
-                  packages:
-                      - elasticsearch
-
-                      - elasticsearch
-
-        - env: ELASTIC=17
-          python: "3.5"
-          addons:
-              apt:
-                  sources:
-                      - elasticsearch-1.7
-                  packages:
-                      - elasticsearch
-
-before_install:
-    - sudo apt-get purge elasticsearch -y
-    - if [[ "$ELASTIC" == "2X" ]]; then sudo apt-get install elasticsearch=2.4.5 && sudo service elasticsearch start; fi
-    - if [[ "$ELASTIC" == "17" ]]; then sudo apt-get install elasticsearch=1.7.5 && sudo service elasticsearch start; fi
 
 install:
     - pip install -r requirements.txt
     - pip install .
+    - docker-compose up -d
 
 script:
     - nosetests

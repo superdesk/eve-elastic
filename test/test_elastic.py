@@ -3,7 +3,7 @@
 import eve
 import time
 import elasticsearch
-from unittest import TestCase
+from unittest import TestCase, skip
 from datetime import datetime
 from copy import deepcopy
 from flask import json
@@ -38,7 +38,7 @@ DOMAIN = {
             'firstcreated': {'type': 'datetime'},
             'category': {
                 'type': 'string',
-                'mapping': {'type': 'keyword'}
+                'mapping': {'type': 'string', 'index': 'not_analyzed'},
             },
             'dateline': {
                 'type': 'dict',
@@ -80,7 +80,7 @@ DOMAIN = {
     'items_with_description': {
         'schema': {
             'uri': {'type': 'string', 'unique': True},
-            'name': {'type': 'string'},
+            'name': {'type': 'string', 'unique': True},
             'description': {'type': 'string'},
             'firstcreated': {'type': 'datetime'},
         },
@@ -154,12 +154,6 @@ DOC_TYPE = 'items'
 
 class TestElastic(TestCase):
 
-    def drop_index(self, index):
-        try:
-            self.es.indices.delete(index)
-        except elasticsearch.exceptions.NotFoundError:
-            pass
-
     def setUp(self):
         settings = {'DOMAIN': DOMAIN}
         settings['ELASTICSEARCH_URL'] = 'http://localhost:9200'
@@ -167,9 +161,9 @@ class TestElastic(TestCase):
         settings['FOO_URL'] = settings['ELASTICSEARCH_URL']
         settings['FOO_INDEX'] = 'foo'
         self.es = elasticsearch.Elasticsearch([settings['ELASTICSEARCH_URL']])
-        self.drop_index(INDEX + '_' + DOC_TYPE)
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
+            self.app.data.drop_index()
             self.app.data.init_index(self.app)
 
     def test_parse_date(self):
@@ -184,6 +178,7 @@ class TestElastic(TestCase):
     def test_generate_index_name(self):
         self.assertNotEqual(generate_index_name('a'), generate_index_name('a'))
 
+    @skip('obsolete')
     def test_put_mapping(self):
         elastic = Elastic(None)
         elastic.init_app(self.app)
@@ -375,10 +370,9 @@ class TestElastic(TestCase):
 
     def test_mapping_is_there_after_delete(self):
         with self.app.app_context():
-            self.app.data.put_mapping(self.app)
-            mapping = self.app.data.get_mapping(INDEX, DOC_TYPE)
+            mapping = self.app.data.get_mapping(DOC_TYPE)
             self.app.data.remove('items')
-            self.assertEqual(mapping, self.app.data.get_mapping(INDEX, DOC_TYPE))
+            self.assertEqual(mapping, self.app.data.get_mapping(DOC_TYPE))
 
     def test_find_one_raw(self):
         with self.app.app_context():
@@ -422,7 +416,7 @@ class TestElastic(TestCase):
             self.app.data.insert('items_with_description', [{'uri': 'foo', 'description': 'test'}, {'uri': 'bar'}])
             req = ParsedRequest()
             req.args = {}
-            req.args['source'] = json.dumps({'query': {'filtered': {'filter': {'term': {'uri': 'bar'}}}}})
+            req.args['source'] = json.dumps({'query': {'bool': {'must': [{'term': {'uri': 'bar'}}]}}})
             self.assertEqual(0, self.app.data.find('items_with_description', req, None).count())
 
     def test_where_filter(self):
@@ -538,10 +532,10 @@ class TestElastic(TestCase):
                 {'uri': 'baz'},
             ])
 
-            query = {'query': {'filtered': {'filter': {'and': [
+            query = {'query': {'bool': {'must': [
                 {'term': {'uri': 'foo'}},
                 {'term': {'uri': 'bar'}},
-            ]}}}}
+            ]}}}
 
             req = ParsedRequest()
             req.args = {'source': json.dumps(query)}
@@ -610,11 +604,12 @@ class TestElastic(TestCase):
             cursor = self.app.data.find('items', req, None)
             self.assertEqual(0, cursor.count())
 
+    @skip('every resource has it\'s own index now')
     def test_custom_index_settings_per_resource(self):
         archived_index = 'elastic_test_archived'
         archived_type = 'archived_items'
 
-        self.drop_index(archived_index)
+        self.app.data.drop_index()
 
         with self.app.app_context():
             self.app.config['ELASTICSEARCH_INDEXES'] = {archived_type: archived_index}
@@ -658,10 +653,8 @@ class TestElastic(TestCase):
             self.assertEqual(2, cursor.count())
 
     def test_elastic_prefix(self):
-        self.drop_index('foo')
         with self.app.app_context():
-            self.app.data.init_index()
-            mapping = self.app.data.get_mapping('foo', 'items_foo')['mappings']['items_foo']['properties']
+            mapping = self.app.data.get_mapping('items_foo')['mappings']['properties']
             self.assertIn('firstcreated', mapping)
 
             self.app.data.insert('items_foo_default_index', [{'uri': 'test'}])
@@ -710,7 +703,7 @@ class TestElasticSearchWithSettings(TestCase):
                                 'type': 'keyword',
                                 'fields': {
                                     'phrase': {
-                                        'type': 'string',
+                                        'type': 'text',
                                         'analyzer': 'phrase_prefix_analyzer',
                                         'search_analyzer': 'phrase_prefix_analyzer'
                                     }
@@ -733,16 +726,11 @@ class TestElasticSearchWithSettings(TestCase):
             self.app.data.init_index(self.app)
             for resource in self.app.config['DOMAIN']:
                 self.app.data.remove(resource)
-
             self.es = get_es(self.app.config.get('ELASTICSEARCH_URL'))
-
-    def tearDown(self):
-        with self.app.app_context():
-            get_indices(self.es).delete(self.index_name)
 
     def test_elastic_settings(self):
         with self.app.app_context():
-            settings = self.app.data.get_settings(self.index_name)
+            settings = self.app.data.get_settings('items')
             analyzer = settings['settings']['index']['analysis']['analyzer']
             self.assertDictEqual({
                 'phrase_prefix_analyzer': {
@@ -830,6 +818,7 @@ class TestElasticSearchWithSettings(TestCase):
         self.assertIsInstance(es.transport.serializer, TestSerializer)
 
 
+@skip('no parent/child join between indexes')
 class TestElasticSearchParentChild(TestCase):
     index_name = 'elastic_index'
     parent_item = 'items'
@@ -879,10 +868,6 @@ class TestElasticSearchParentChild(TestCase):
             self.es = get_es(self.app.config.get('ELASTICSEARCH_URL'))
             self.checkVersion()
 
-    def tearDown(self):
-        with self.app.app_context():
-            get_indices(self.es).delete(self.index_name)
-
     def checkVersion(self):
         with self.app.app_context():
             info = self.es.info()
@@ -891,7 +876,7 @@ class TestElasticSearchParentChild(TestCase):
     def test_child_items_mapping(self):
         with self.app.app_context():
             mapping = self.es.indices.get_mapping(index=self.index_name, doc_type='child_items')
-            for key, value in mapping.items():
+            for value in mapping.values():
                 self.assertIn('child_items', value.get('mappings'))
                 self.assertDictEqual(value.get('mappings').get('child_items').get('_parent'), {'type': 'items'})
                 self.assertDictEqual(value.get('mappings').get('child_items').get('_routing'), {'required': True})
@@ -1123,15 +1108,9 @@ class TestElasticInnerHits(TestCase):
 
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
+            self.app.data.drop_index()
             self.app.data.init_index(self.app)
-            for resource in self.app.config['DOMAIN']:
-                self.app.data.remove(resource)
-
             self.es = get_es(self.app.config.get('ELASTICSEARCH_URL'))
-
-    def tearDown(self):
-        with self.app.app_context():
-            get_indices(self.es).delete(self.index_name)
 
     def test_inner_hits_query(self):
         with self.app.app_context():
