@@ -233,8 +233,7 @@ class Elastic(DataLayer):
 
     def init_index(self):
         """Create indexes and put mapping."""
-        resources = self._get_elastic_resources()
-        for resource, _ in resources.items():
+        for resource in self._get_elastic_resources():
             es = self.elastic(resource)
             index = self._resource_index(resource)
             settings = self._resource_config(resource, "SETTINGS")
@@ -249,38 +248,6 @@ class Elastic(DataLayer):
                 self._put_settings(es, index, settings)
             if mappings:
                 self._put_mappings(es, index, mappings)
-
-    def _get_indexes(self):
-        """Based on the resource definition calculates the index definition"""
-        indexes = {}
-        for resource in self._get_elastic_resources():
-            try:
-                index = self._resource_index(resource)
-
-            except KeyError:  # ignore missing
-                continue
-
-            if index not in indexes:
-                indexes.update(
-                    {
-                        index: {
-                            "resource": self.elastic(resource),
-                            "index_settings": {"mappings": {}},
-                        }
-                    }
-                )
-
-                settings = self._resource_config(resource, "SETTINGS")
-                if settings:
-                    indexes[index]["index_settings"].update(settings)
-
-            resource_config = self.app.config["DOMAIN"][resource]
-            properties = self._get_mapping_properties(
-                resource_config, parent=self._get_parent_type(resource)
-            )
-            indexes[index]["index_settings"]["mappings"] = properties
-
-        return indexes
 
     def get_datasource(self, resource):
         return getattr(self, "_datasource", self.datasource)(resource)
@@ -893,6 +860,19 @@ class Elastic(DataLayer):
                     self.elastic(resource).indices.delete(alias)
                 except elasticsearch.exceptions.NotFoundError:
                     pass
+
+    def search(self, query, resources, params=None):
+        """Search multiple resources at the same time.
+
+        They must use all same elastic instance and should be same schema.
+        """
+        if params is None:
+            params = {}
+        if isinstance(resources, str):
+            resources = resources.split(",")
+        index = [self._resource_index(resource) for resource in resources]
+        hits = self.elastic(resources[0]).search(body=query, index=index, **params)
+        return self._parse_hits(hits, resources[0])
 
 
 def build_elastic_query(doc):

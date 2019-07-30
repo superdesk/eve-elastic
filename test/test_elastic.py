@@ -805,6 +805,15 @@ class TestElastic(TestCase):
             self.assertNotIn("retry_on_conflict", update_mock.call_args[1])
             self.app.data.elastic("items").update = original_method
 
+    def test_search_multiple_resource(self):
+        with self.app.app_context():
+            self.app.data.insert("items", [{"uri": "foo", "name": "item"}])
+            self.app.data.insert("archived_items", [{"name": "archived"}])
+            self.app.data.insert("items_foo", [{"name": "foo"}])
+
+            docs = self.app.data.search({}, "items,archived_items")
+            self.assertEqual(2, docs.count())
+
 
 class TestElasticSearchWithSettings(TestCase):
     index_name = "elastic_settings"
