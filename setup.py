@@ -28,7 +28,7 @@ setup(
         'ciso8601>=1.0.2,<2',
         'pytz>=2015.4',
         'elasticsearch>=7.0.0,<8.0.0',
-        'Eve>=0.4',
+        'Eve>=0.4,<0.9',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
