@@ -1,5 +1,4 @@
 import ast
-import json
 import arrow
 import ciso8601
 import pytz  # NOQA
@@ -11,7 +10,7 @@ from elasticsearch.helpers import bulk, reindex as reindex_new
 from .helpers import reindex as reindex_old
 
 from uuid import uuid4
-from flask import request, abort
+from flask import request, abort, json
 from eve.utils import config
 from eve.io.base import DataLayer
 from eve.io.mongo.parser import parse, ParseError
@@ -48,7 +47,7 @@ def format_doc(hit, schema, dates):
     """Format given doc to match given schema."""
     doc = hit.get("_source", {})
     doc.setdefault(config.ID_FIELD, hit.get("_id"))
-    doc.setdefault("_type", hit.get("_type"))
+    doc["_type"] = doc.pop("_resource")
     if hit.get("highlight"):
         doc["es_highlight"] = hit.get("highlight")
 
@@ -105,24 +104,81 @@ def reindex(es, source, dest):
         return reindex_new(es, source, dest)
 
 
-def fix_old_mapping(mapping):
+def fix_mapping(mapping):
     if mapping.get("type") == "string" and mapping.get("index") == "not_analyzed":
         mapping["type"] = "keyword"
         mapping.pop("index")
+    elif mapping.get("type") == "string" and mapping.get("index") == "no":
+        mapping["type"] = "text"
+        mapping["index"] = False
     elif mapping.get("type") == "string":
         mapping["type"] = "text"
+
+    if mapping.get("fields"):
+        for field, field_mapping in mapping.get("fields").items():
+            fix_mapping(field_mapping)
     return mapping
+
+
+def merge_queries(dest, key, value):
+    dest.setdefault(key, [])
+    if dest.get(key) and not isinstance(dest[key], list):
+        dest[key] = [dest[key]]
+    if isinstance(value, list):
+        dest[key].extend(value)
+    else:
+        dest[key].append(value)
+
+
+def fix_query(query, top=True):
+    if isinstance(query, list):
+        return [fix_query(_query, top=False) for _query in query]
+    elif not isinstance(query, dict):
+        return query
+
+    new_query = {}
+    for key, val in query.items():
+        if key == 'filtered':
+            new_query.setdefault('bool', {})
+            if val.get('filter'):
+                merge_queries(new_query['bool'], 'filter', fix_query(val['filter'], top=False))
+            if val.get('query'):
+                merge_queries(new_query['bool'], 'must', fix_query(val['query'], top=False))
+        elif key == 'or':
+            new_query['bool'] = {
+                'should': fix_query(val, top=False),
+                'minimum_should_match': 1,
+            }
+        elif key == 'and':
+            new_query['bool'] = {
+                'must': fix_query(val, top=False)
+            }
+        elif key == 'not':
+            new_query['bool'] = {
+                'must_not': fix_query(val, top=False)
+            }
+        elif key == '_type':
+            new_query['_resource'] = fix_query(val, top=False)
+        else:
+            new_query[key] = fix_query(val, top=False)
+
+    # handle top level filter if any
+    if top and new_query.get('filter'):
+        filter_ = new_query.pop('filter')
+        merge_queries(new_query['bool'], 'filter', filter_)
+
+    if top:
+        print('old', json.dumps(query, indent=2), 'new', json.dumps(new_query, indent=2))
+    return new_query
 
 
 class InvalidSearchString(Exception):
     """Exception thrown when search string has invalid value"""
-
     pass
 
 
 class InvalidIndexSettings(Exception):
     """Exception is thrown when put_settings is called without ELASTIC_SETTINGS"""
-
     pass
 
 
@@ -242,18 +298,17 @@ class Elastic(DataLayer):
 
     def _init_index(self, es, index, settings=None, mappings=None):
         if not es.indices.exists(index):
-            self._create_index(es, index, settings, mappings)
-        else:
-            if settings:
-                self._put_settings(es, index, settings)
-            if mappings:
-                self._put_mappings(es, index, mappings)
+            self._create_index(es, index, settings)
+        elif settings:
+            self._put_settings(es, index, settings)
+        if mappings:
+            self._put_mappings(es, index, mappings)
 
     def get_datasource(self, resource):
         return getattr(self, "_datasource", self.datasource)(resource)
 
-    def _get_mapping(self, schema):
-        """Get mapping for given resource or item schema.
+    def _generate_mapping(self, schema):
+        """Generate mapping for given resource or item schema.
 
         :param schema: resource or dict/list type item schema
         """
@@ -270,11 +325,11 @@ class Elastic(DataLayer):
         :param schema: field schema
         """
         if "mapping" in schema:
-            return fix_old_mapping(schema["mapping"])
+            return fix_mapping(schema["mapping"])
         elif schema["type"] == "dict" and "schema" in schema:
-            return self._get_mapping(schema["schema"])
+            return self._generate_mapping(schema["schema"])
         elif schema["type"] == "list" and "schema" in schema.get("schema", {}):
-            return self._get_mapping(schema["schema"]["schema"])
+            return self._generate_mapping(schema["schema"]["schema"])
         elif schema["type"] == "datetime":
             return {"type": "date"}
         elif schema["type"] == "string" and schema.get("unique"):
@@ -345,16 +400,17 @@ class Elastic(DataLayer):
             es = self.elastic(resource)
 
         try:
-            es.indices.put_mapping(**kwargs)
+            self.elastic(resource).indices.put_mapping(**kwargs)
         except elasticsearch.exceptions.RequestError:
             logger.exception("mapping error, updating settings resource=%s" % resource)
 
     def _get_mapping_properties(self, resource_config, parent=None):
-        properties = self._get_mapping(resource_config["schema"])
+        properties = self._generate_mapping(resource_config["schema"])
         properties["properties"].update(
             {
                 config.DATE_CREATED: self._get_field_mapping({"type": "datetime"}),
                 config.LAST_UPDATED: self._get_field_mapping({"type": "datetime"}),
+                '_resource': {'type': 'keyword'},
             }
         )
 
@@ -509,7 +565,7 @@ class Elastic(DataLayer):
 
         args = self._es_args(resource, source_projections=source_projections)
         try:
-            hits = self.elastic(resource).search(body=query, **args)
+            hits = self.elastic(resource).search(body=fix_query(query), **args)
         except elasticsearch.exceptions.RequestError as e:
             if e.status_code == 400 and "No mapping found for" in e.error:
                 hits = {}
@@ -580,7 +636,7 @@ class Elastic(DataLayer):
 
             try:
                 args["size"] = 1
-                hits = self.elastic(resource).search(body=query, **args)
+                hits = self.elastic(resource).search(body=fix_query(query), **args)
                 docs = self._parse_hits(hits, resource)
                 return docs.first()
             except elasticsearch.NotFoundError:
@@ -622,7 +678,7 @@ class Elastic(DataLayer):
                 query = {"query": {"bool": {"must": [{"term": {"_id": _id}}]}}}
                 try:
                     args["size"] = 1
-                    hits = self.elastic(resource).search(body=query, **args)
+                    hits = self.elastic(resource).search(body=fix_query(query), **args)
                     docs = self._parse_hits(hits, resource)
                     return docs.first()
                 except elasticsearch.NotFoundError:
@@ -646,6 +702,7 @@ class Elastic(DataLayer):
         for doc in doc_or_docs:
             self._update_parent_args(resource, kwargs, doc)
             _id = doc.pop("_id", None)
+            doc['_resource'] = resource
             res = self.elastic(resource).index(body=doc, id=_id, **kwargs)
             doc.setdefault("_id", res.get("_id", _id))
             ids.append(doc.get("_id"))
@@ -670,7 +727,6 @@ class Elastic(DataLayer):
         args = self._es_args(resource, refresh=True)
         if self._get_retry_on_conflict():
             args["retry_on_conflict"] = self._get_retry_on_conflict()
-
         updates.pop("_id", None)
         updates.pop("_type", None)
         self._update_parent_args(resource, args, updates)
@@ -853,7 +909,6 @@ class Elastic(DataLayer):
                 alias = self._resource_index(resource)
                 alias_info = self.elastic(resource).indices.get_alias(name=alias)
                 for index in alias_info:
-                    print("delete", index, alias)
                     self.elastic(resource).indices.delete(index)
             except elasticsearch.exceptions.NotFoundError:
                 try:
@@ -871,8 +926,12 @@ class Elastic(DataLayer):
         if isinstance(resources, str):
             resources = resources.split(",")
         index = [self._resource_index(resource) for resource in resources]
-        hits = self.elastic(resources[0]).search(body=query, index=index, **params)
-        return self._parse_hits(hits, resources[0])
+        try:
+            print('search', ','.join(index))
+            hits = self.elastic(resources[0]).search(body=fix_query(query), index=index, **params)
+            return self._parse_hits(hits, resources[0])
+        except elasticsearch.exceptions.RequestError:
+            raise
 
 
 def build_elastic_query(doc):
