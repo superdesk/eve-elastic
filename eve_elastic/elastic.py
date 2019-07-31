@@ -395,21 +395,21 @@ class Elastic(DataLayer):
         es.indices.put_mapping(index=index, body=mappings)
 
     def get_mapping(self, resource):
-        """Get mapping for index.
+        """Get mapping for resource.
 
-        :param index: index name
+        :param resource: resource name
         """
         index = self._resource_index(resource)
-        mapping = self.es.indices.get_mapping(index=index)
+        mapping = self.elastic(resource).indices.get_mapping(index=index)
         return next(iter(mapping.values()))
 
     def get_settings(self, resource):
-        """Get settings for index.
+        """Get settings for resource.
 
-        :param index: index name
+        :param resource: resource name
         """
         index = self._resource_index(resource)
-        settings = self.es.indices.get_settings(index=index)
+        settings = self.elastic(resource).indices.get_settings(index=index)
         return next(iter(settings.values()))
 
     def get_index_by_alias(self, alias):

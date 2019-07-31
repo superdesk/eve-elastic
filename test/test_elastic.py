@@ -163,17 +163,11 @@ class TestElastic(TestCase):
     def test_generate_index_name(self):
         self.assertNotEqual(generate_index_name("a"), generate_index_name("a"))
 
-    @skip("obsolete")
     def test_put_mapping(self):
-        elastic = Elastic(None)
-        elastic.init_app(self.app)
         with self.app.app_context():
-            elastic.put_mapping(self.app)
+            mapping = self.app.data.get_mapping('items')
 
-        mapping = elastic.get_mapping(elastic.index)
-        self.assertNotIn("published_items", mapping["mappings"])
-
-        items_mapping = mapping["mappings"]["items"]["properties"]
+        items_mapping = mapping["mappings"]["properties"]
 
         self.assertIn("firstcreated", items_mapping)
         self.assertEqual("date", items_mapping["firstcreated"]["type"])
