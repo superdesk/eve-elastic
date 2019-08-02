@@ -163,7 +163,7 @@ class TestElastic(TestCase):
     def test_generate_index_name(self):
         self.assertNotEqual(generate_index_name("a"), generate_index_name("a"))
 
-    def test_put_mapping(self):
+    def test_get_mapping(self):
         with self.app.app_context():
             mapping = self.app.data.get_mapping('items')
 
@@ -379,6 +379,8 @@ class TestElastic(TestCase):
             self.assertEqual(1, res.count())
             self.assertTrue("description" not in res.docs[0])
             self.assertTrue("name" in res.docs[0])
+            self.assertEqual(res.docs[0].get('_etag'),
+                self.app.data.find_one('items_with_description', req=None, _id=res.docs[0]['_id'])['_etag'])
 
     def test_should_aggregate(self):
         with self.app.app_context():
@@ -824,9 +826,8 @@ class TestElasticSearchWithSettings(TestCase):
                                 "type": "keyword",
                                 "fields": {
                                     "phrase": {
-                                        "type": "text",
+                                        "type": "string",
                                         "analyzer": "phrase_prefix_analyzer",
-                                        "search_analyzer": "phrase_prefix_analyzer",
                                     }
                                 },
                             },
@@ -915,7 +916,6 @@ class TestElasticSearchWithSettings(TestCase):
                         "phrases": {
                             "type": "text",
                             "analyzer": "prefix_analyzer",
-                            "search_analyzer": "prefix_analyzer",
                         }
                     },
                 },
@@ -931,7 +931,7 @@ class TestElasticSearchWithSettings(TestCase):
             self.app.config["ELASTICSEARCH_SETTINGS"] = new_settings
 
             with self.assertLogs("elastic") as log:
-                self.app.data.put_mapping(self.app)
+                self.app.data.put_mapping()
                 self.assertIn(
                     "ERROR:elastic:mapping error, updating settings resource=items",
                     log.output[0],

@@ -19,6 +19,8 @@ from eve.io.mongo.parser import parse, ParseError
 logging.basicConfig()
 logger = logging.getLogger("elastic")
 
+RESOURCE_FIELD = '_resource'
+
 
 def parse_date(date_str):
     """Parse elastic datetime string."""
@@ -47,7 +49,7 @@ def format_doc(hit, schema, dates):
     """Format given doc to match given schema."""
     doc = hit.get("_source", {})
     doc.setdefault(config.ID_FIELD, hit.get("_id"))
-    doc["_type"] = doc.pop("_resource")
+    doc["_type"] = doc.pop(RESOURCE_FIELD)
     if hit.get("highlight"):
         doc["es_highlight"] = hit.get("highlight")
 
@@ -158,7 +160,7 @@ def fix_query(query, top=True):
                 'must_not': fix_query(val, top=False)
             }
         elif key == '_type':
-            new_query['_resource'] = fix_query(val, top=False)
+            new_query[RESOURCE_FIELD] = fix_query(val, top=False)
         else:
             new_query[key] = fix_query(val, top=False)
 
@@ -237,7 +239,7 @@ def set_filters(query, filters):
     if filters:
         for f in filters:
             if f is not None:
-                query["query"]["bool"].setdefault("must", []).append(f)
+                query["query"]["bool"].setdefault("filter", []).append(f)
 
 
 def set_sort(query, sort):
@@ -379,38 +381,13 @@ class Elastic(DataLayer):
         )
         return properties
 
-    def _put_resource_mapping(
-        self, resource, es, force_index=None, properties=None, **kwargs
-    ):
-        if not properties:
-            resource_config = self.app.config["DOMAIN"][resource]
-            properties = self._get_mapping_properties(
-                resource_config, parent=self._get_parent_type(resource)
-            )
-
-        if not kwargs:
-            kwargs = self._es_args(resource)
-
-        kwargs["body"] = {"properties": properties}
-
-        if force_index:
-            kwargs["index"] = force_index
-
-        if not es:
-            es = self.elastic(resource)
-
-        try:
-            self.elastic(resource).indices.put_mapping(**kwargs)
-        except elasticsearch.exceptions.RequestError:
-            logger.exception("mapping error, updating settings resource=%s" % resource)
-
     def _get_mapping_properties(self, resource_config, parent=None):
         properties = self._generate_mapping(resource_config["schema"])
         properties["properties"].update(
             {
                 config.DATE_CREATED: self._get_field_mapping({"type": "datetime"}),
                 config.LAST_UPDATED: self._get_field_mapping({"type": "datetime"}),
-                '_resource': {'type': 'keyword'},
+                RESOURCE_FIELD: {'type': 'keyword'},
             }
         )
 
@@ -419,33 +396,6 @@ class Elastic(DataLayer):
 
         properties["properties"].pop("_id", None)
         return properties
-
-    def put_mapping(self, app, index=None):
-        """Put mapping for elasticsearch for current schema.
-
-        It's not called automatically now, but rather left for user to call it whenever it makes sense.
-        """
-        for resource, resource_config in self._get_elastic_resources().items():
-            datasource = resource_config.get("datasource", {})
-
-            if not is_elastic(datasource):
-                continue
-
-            if (
-                datasource.get("source", resource) != resource
-            ):  # only put mapping for core types
-                continue
-
-            properties = self._get_mapping_properties(resource_config)
-
-            kwargs = {"index": self._resource_index(resource), "body": properties}
-
-            try:
-                self.elastic(resource).indices.put_mapping(**kwargs)
-            except elasticsearch.exceptions.RequestError:
-                logger.exception(
-                    "mapping error, updating settings resource=%s" % resource
-                )
 
     def _put_mappings(self, es, index, mappings):
         es.indices.put_mapping(index=index, body=mappings)
@@ -700,10 +650,9 @@ class Elastic(DataLayer):
         ids = []
         kwargs.update(self._es_args(resource))
         for doc in doc_or_docs:
-            self._update_parent_args(resource, kwargs, doc)
             _id = doc.pop("_id", None)
-            doc['_resource'] = resource
-            res = self.elastic(resource).index(body=doc, id=_id, **kwargs)
+            body = self._prepare_for_storage(resource, doc, kwargs)
+            res = self.elastic(resource).index(body=body, id=_id, **kwargs)
             doc.setdefault("_id", res.get("_id", _id))
             ids.append(doc.get("_id"))
         self._refresh_resource_index(resource)
@@ -727,18 +676,22 @@ class Elastic(DataLayer):
         args = self._es_args(resource, refresh=True)
         if self._get_retry_on_conflict():
             args["retry_on_conflict"] = self._get_retry_on_conflict()
-        updates.pop("_id", None)
-        updates.pop("_type", None)
-        self._update_parent_args(resource, args, updates)
-        return self.elastic(resource).update(id=id_, body={"doc": updates}, **args)
+        doc = self._prepare_for_storage(resource, updates, args)
+        return self.elastic(resource).update(id=id_, body={"doc": doc}, **args)
 
     def replace(self, resource, id_, document):
         """Replace document in index."""
         args = self._es_args(resource, refresh=True)
-        document.pop("_id", None)
-        document.pop("_type", None)
-        self._update_parent_args(resource, args, document)
-        return self.elastic(resource).index(body=document, id=id_, **args)
+        doc = self._prepare_for_storage(resource, document, args)
+        return self.elastic(resource).index(body=doc, id=id_, **args)
+    
+    def _prepare_for_storage(self, resource, data, args):
+        doc = data.copy()
+        doc.pop("_id", None)
+        doc.pop("_type", None)
+        doc[RESOURCE_FIELD] = resource
+        self._update_parent_args(resource, args, doc)
+        return doc
 
     def remove(self, resource, lookup=None, parent=None, **kwargs):
         """Remove docs for resource.
@@ -814,6 +767,11 @@ class Elastic(DataLayer):
 
         if source_projections:
             args["_source"] = source_projections
+            if isinstance(args['_source'], list):
+                args['_source'].append(RESOURCE_FIELD)
+            else:
+                args['_source'] = [args['_source'], RESOURCE_FIELD]
+
         if refresh:
             args["refresh"] = refresh
 
