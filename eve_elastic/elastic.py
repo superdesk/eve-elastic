@@ -106,19 +106,35 @@ def reindex(es, source, dest):
         return reindex_new(es, source, dest)
 
 
-def fix_mapping(mapping):
-    if mapping.get("type") == "string" and mapping.get("index") == "not_analyzed":
-        mapping["type"] = "keyword"
-        mapping.pop("index")
-    elif mapping.get("type") == "string" and mapping.get("index") == "no":
-        mapping["type"] = "text"
-        mapping["index"] = False
-    elif mapping.get("type") == "string":
-        mapping["type"] = "text"
+def fix_mapping(mapping, top=True):
+    if isinstance(mapping, list):
+        return [fix_mapping(_mapping, top=False) for _mapping in mapping]
+    elif not isinstance(mapping, dict):
+        return mapping
+
+    new_mapping = {}
+    for key, val in mapping.items():
+        if not isinstance(val, dict):
+            new_mapping[key] = fix_mapping(val, top=False)
+        elif val.get("type") == "string" and val.get("index") == "not_analyzed":
+            new_mapping[key] = {"type": "keyword"}
+        elif val.get("type") == "string" and val.get("index") == "no":
+            new_mapping[key] = {"type": "text", "index": False}
+        elif val.get("type") == "string":
+            new_mapping[key] = fix_mapping(val.copy(), top=False)
+            new_mapping[key]['type'] = 'text'
+        else:
+            new_mapping[key] = fix_mapping(val, top=False)
+
+    if top:
+        print('fix mapping', json.dumps(mapping, indent=2), 'to', json.dumps(new_mapping, indent=2))
+
+    return new_mapping
 
     if mapping.get("fields"):
         for field, field_mapping in mapping.get("fields").items():
             fix_mapping(field_mapping)
+
     return mapping
 
 
@@ -306,7 +322,8 @@ class Elastic(DataLayer):
         elif settings:
             self._put_settings(es, index, settings)
         if mappings:
-            self._put_mappings(es, index, mappings)
+            assert 'string' not in json.dumps(fix_mapping(mappings)), 'error index={} {}'.format(index, json.dumps(mappings, indent=2))
+            self._put_mappings(es, index, fix_mapping(mappings))
 
     def get_datasource(self, resource):
         return getattr(self, "_datasource", self.datasource)(resource)
@@ -329,7 +346,7 @@ class Elastic(DataLayer):
         :param schema: field schema
         """
         if "mapping" in schema:
-            return fix_mapping(schema["mapping"])
+            return schema["mapping"]
         elif schema["type"] == "dict" and "schema" in schema:
             return self._generate_mapping(schema["schema"])
         elif schema["type"] == "list" and "schema" in schema.get("schema", {}):
@@ -767,11 +784,12 @@ class Elastic(DataLayer):
         args = {"index": self._resource_index(resource)}
 
         if source_projections:
-            args["_source"] = source_projections
-            if isinstance(args['_source'], list):
-                args['_source'].append(RESOURCE_FIELD)
-            else:
-                args['_source'] = [args['_source'], RESOURCE_FIELD]
+            args["_source"] = ','.join([
+                source_projections,
+                RESOURCE_FIELD,
+                config.ETAG,
+            ])
+            print('projection', args['_source'])
 
         if refresh:
             args["refresh"] = refresh
