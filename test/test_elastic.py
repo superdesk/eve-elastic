@@ -379,7 +379,8 @@ class TestElastic(TestCase):
             self.assertEqual(1, res.count())
             self.assertTrue("description" not in res.docs[0])
             self.assertTrue("name" in res.docs[0])
-            self.assertEqual(res.docs[0].get('_etag'),
+            self.assertEqual(
+                res.docs[0].get('_etag'),
                 self.app.data.find_one('items_with_description', req=None, _id=res.docs[0]['_id'])['_etag'])
 
     def test_should_aggregate(self):

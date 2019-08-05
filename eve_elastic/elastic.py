@@ -167,7 +167,9 @@ def fix_query(query, top=True):
     # handle top level filter if any
     if top and new_query.get('filter'):
         filter_ = new_query.pop('filter')
-        merge_queries(new_query['bool'], 'filter', filter_)
+        new_query.setdefault('query', {})
+        new_query['query'].setdefault('bool', {})
+        merge_queries(new_query['query']['bool'], 'filter', filter_)
 
     if top:
         print('old', json.dumps(query, indent=2), 'new', json.dumps(new_query, indent=2))
@@ -662,11 +664,10 @@ class Elastic(DataLayer):
         """Bulk insert documents."""
         kwargs.update(self._es_args(resource))
         parent_type = self._get_parent_type(resource)
-        if parent_type:
-            for doc in docs:
-                if doc.get(parent_type.get("field")):
-                    doc["_parent"] = doc.get(parent_type.get("field"))
-
+        for doc in docs:
+            doc[RESOURCE_FIELD] = resource
+            if parent_type and doc.get(parent_type.get("field")):
+                doc["_parent"] = doc.get(parent_type.get("field"))
         res = bulk(self.elastic(resource), docs, stats_only=False, **kwargs)
         self._refresh_resource_index(resource)
         return res
@@ -684,7 +685,7 @@ class Elastic(DataLayer):
         args = self._es_args(resource, refresh=True)
         doc = self._prepare_for_storage(resource, document, args)
         return self.elastic(resource).index(body=doc, id=id_, **args)
-    
+
     def _prepare_for_storage(self, resource, data, args):
         doc = data.copy()
         doc.pop("_id", None)
