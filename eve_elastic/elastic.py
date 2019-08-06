@@ -19,7 +19,7 @@ from eve.io.mongo.parser import parse, ParseError
 logging.basicConfig()
 logger = logging.getLogger("elastic")
 
-RESOURCE_FIELD = '_resource'
+RESOURCE_FIELD = "_resource"
 
 
 def parse_date(date_str):
@@ -114,7 +114,7 @@ def fix_mapping(mapping, top=True):
             new_mapping[key] = {"type": "text", "index": False}
         elif val.get("type") == "string":
             new_mapping[key] = fix_mapping(val.copy(), top=False)
-            new_mapping[key]['type'] = 'text'
+            new_mapping[key]["type"] = "text"
         else:
             new_mapping[key] = fix_mapping(val, top=False)
     return new_mapping
@@ -144,49 +144,56 @@ def fix_query(query, top=True):
 
     new_query = {}
     for key, val in query.items():
-        if key == 'filtered':
-            new_query.setdefault('bool', {})
-            if val.get('filter'):
-                merge_queries(new_query['bool'], 'filter', fix_query(val['filter'], top=False))
-            if val.get('query'):
-                merge_queries(new_query['bool'], 'must', fix_query(val['query'], top=False))
-        elif key == 'or':
-            new_query['bool'] = {
-                'should': fix_query(val, top=False),
-                'minimum_should_match': 1,
+        if key == "filtered":
+            new_query.setdefault("bool", {})
+            if val.get("filter"):
+                merge_queries(
+                    new_query["bool"], "filter", fix_query(val["filter"], top=False)
+                )
+            if val.get("query"):
+                merge_queries(
+                    new_query["bool"], "must", fix_query(val["query"], top=False)
+                )
+        elif key == "or":
+            new_query["bool"] = {
+                "should": fix_query(val, top=False),
+                "minimum_should_match": 1,
             }
-        elif key == 'and':
-            new_query['bool'] = {
-                'must': fix_query(val, top=False)
-            }
-        elif key == 'not':
-            new_query['bool'] = {
-                'must_not': fix_query(val, top=False)
-            }
-        elif key == '_type':
+        elif key == "and":
+            new_query["bool"] = {"must": fix_query(val, top=False)}
+        elif key == "not":
+            new_query["bool"] = {"must_not": fix_query(val, top=False)}
+        elif key == "_type":
             new_query[RESOURCE_FIELD] = fix_query(val, top=False)
         else:
             new_query[key] = fix_query(val, top=False)
 
     # handle top level filter if any
-    if top and new_query.get('filter'):
-        filter_ = new_query.pop('filter')
-        new_query.setdefault('query', {})
-        new_query['query'].setdefault('bool', {})
-        merge_queries(new_query['query']['bool'], 'filter', filter_)
+    if top and new_query.get("filter"):
+        filter_ = new_query.pop("filter")
+        new_query.setdefault("query", {})
+        new_query["query"].setdefault("bool", {})
+        merge_queries(new_query["query"]["bool"], "filter", filter_)
 
     if top:
-        print('old', json.dumps(query, indent=2, default=ElasticJSONSerializer().default), 'new', json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default))
+        print(
+            "old",
+            json.dumps(query, indent=2, default=ElasticJSONSerializer().default),
+            "new",
+            json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default),
+        )
     return new_query
 
 
 class InvalidSearchString(Exception):
     """Exception thrown when search string has invalid value"""
+
     pass
 
 
 class InvalidIndexSettings(Exception):
     """Exception is thrown when put_settings is called without ELASTIC_SETTINGS"""
+
     pass
 
 
@@ -346,8 +353,8 @@ class Elastic(DataLayer):
             return {"type": "keyword"}
         elif schema["type"] == "string":
             return {"type": "text"}
-        elif schema["type"] == 'integer':
-            return {"type": 'integer'}
+        elif schema["type"] == "integer":
+            return {"type": "integer"}
 
     def _create_index_from_alias(self, es, alias, settings=None):
         """Create new index and ignore if it exists already."""
@@ -369,14 +376,14 @@ class Elastic(DataLayer):
         elastic_resources = {}
         for resource in self.app.config["DOMAIN"]:
             try:
-                datasource = self.app.config['SOURCES'][resource]
+                datasource = self.app.config["SOURCES"][resource]
             except KeyError:
                 continue
 
             if datasource.get("source") != resource:  # core types only
                 continue
-            
-            if datasource.get("source").endswith(self.app.config['VERSIONS']):
+
+            if datasource.get("source").endswith(self.app.config["VERSIONS"]):
                 continue
 
             if not is_elastic(datasource):
@@ -398,7 +405,7 @@ class Elastic(DataLayer):
             {
                 config.DATE_CREATED: self._get_field_mapping({"type": "datetime"}),
                 config.LAST_UPDATED: self._get_field_mapping({"type": "datetime"}),
-                RESOURCE_FIELD: {'type': 'keyword'},
+                RESOURCE_FIELD: {"type": "keyword"},
             }
         )
 
@@ -429,7 +436,7 @@ class Elastic(DataLayer):
         index = self._resource_index(resource)
         settings = self.elastic(resource).indices.get_settings(index=index)
         return next(iter(settings.values()))
-    
+
     def get_index(self, resource):
         alias = self._resource_index(resource)
         info = self.elastic(resource).indices.get_alias(name=alias)
@@ -782,11 +789,9 @@ class Elastic(DataLayer):
         args = {"index": self._resource_index(resource)}
 
         if source_projections:
-            args["_source"] = ','.join([
-                source_projections,
-                RESOURCE_FIELD,
-                config.ETAG,
-            ])
+            args["_source"] = ",".join(
+                [source_projections, RESOURCE_FIELD, config.ETAG]
+            )
 
         if refresh:
             args["refresh"] = refresh
@@ -901,11 +906,13 @@ class Elastic(DataLayer):
             resources = resources.split(",")
         index = [self._resource_index(resource) for resource in resources]
         try:
-            hits = self.elastic(resources[0]).search(body=fix_query(query), index=index, **params)
+            hits = self.elastic(resources[0]).search(
+                body=fix_query(query), index=index, **params
+            )
             return self._parse_hits(hits, resources[0])
         except elasticsearch.exceptions.RequestError:
             raise
-    
+
     def reindex(self, resource):
         es = self.elastic(resource)
         alias = self._resource_index(resource)
@@ -915,27 +922,27 @@ class Elastic(DataLayer):
 
         # create new index
         index = generate_index_name(alias)
-        print('create', index)
+        print("create", index)
         self._create_index(es, index, settings)
         self._put_mapping(es, index, mapping)
 
         # reindex data
-        print('reindex', alias, index)
+        print("reindex", alias, index)
         reindex(es, alias, index)
 
         # remove old alias
-        print('remove alias', alias, old_index)
+        print("remove alias", alias, old_index)
         es.indices.delete_alias(index=old_index, name=alias)
 
         # remove old index
-        print('remove index', old_index)
+        print("remove index", old_index)
         es.indices.delete(old_index)
 
         # create alias for new index
-        print('put', alias, index)
+        print("put", alias, index)
         es.indices.put_alias(index=index, name=alias)
 
-        print('refresh', index)
+        print("refresh", index)
         es.indices.refresh(index)
 
 

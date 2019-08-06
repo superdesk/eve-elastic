@@ -165,7 +165,7 @@ class TestElastic(TestCase):
 
     def test_get_mapping(self):
         with self.app.app_context():
-            mapping = self.app.data.get_mapping('items')
+            mapping = self.app.data.get_mapping("items")
 
         items_mapping = mapping["mappings"]["properties"]
 
@@ -379,7 +379,7 @@ class TestElastic(TestCase):
             self.assertEqual(1, res.count())
             self.assertTrue("description" not in res.docs[0])
             self.assertTrue("name" in res.docs[0])
-            self.assertEqual("items_with_description", res.docs[0]['_type'])
+            self.assertEqual("items_with_description", res.docs[0]["_type"])
 
     def test_should_aggregate(self):
         with self.app.app_context():
@@ -912,10 +912,7 @@ class TestElasticSearchWithSettings(TestCase):
                 "mapping": {
                     "type": "text",
                     "fields": {
-                        "phrases": {
-                            "type": "text",
-                            "analyzer": "prefix_analyzer",
-                        }
+                        "phrases": {"type": "text", "analyzer": "prefix_analyzer"}
                     },
                 },
             }
