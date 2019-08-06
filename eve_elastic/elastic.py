@@ -10,7 +10,7 @@ from bson import ObjectId
 from elasticsearch.helpers import bulk, reindex
 
 from uuid import uuid4
-from flask import request, abort, json
+from flask import request, abort, json, current_app as app
 from eve.utils import config
 from eve.io.base import DataLayer
 from eve.io.mongo.parser import parse, ParseError
@@ -155,16 +155,21 @@ def fix_query(query, top=True):
                     new_query["bool"], "must", fix_query(val["query"], top=False)
                 )
         elif key == "or":
-            new_query["bool"] = {
-                "should": fix_query(val, top=False),
-                "minimum_should_match": 1,
-            }
+            new_query.setdefault("bool", {})
+            merge_queries(new_query["bool"], "should", fix_query(val, top=False))
+            new_query["bool"]["minimum_should_match"] = 1
         elif key == "and":
-            new_query["bool"] = {"must": fix_query(val, top=False)}
+            new_query.setdefault("bool", {})
+            merge_queries(new_query["bool"], "must", fix_query(val, top=False))
         elif key == "not":
+            new_query.setdefault("bool", {})
             new_query["bool"] = {"must_not": fix_query(val, top=False)}
         elif key == "_type":
             new_query[RESOURCE_FIELD] = fix_query(val, top=False)
+        elif key == "bool":
+            new_query.setdefault("bool", {})
+            for _key, _val in val.items():
+                merge_queries(new_query["bool"], _key, fix_query(_val, top=False))
         else:
             new_query[key] = fix_query(val, top=False)
 
@@ -377,16 +382,16 @@ class Elastic(DataLayer):
 
     def _get_elastic_resources(self):
         elastic_resources = {}
-        for resource in self.app.config["DOMAIN"]:
+        for resource in app.config["DOMAIN"]:
             try:
-                datasource = self.app.config["SOURCES"][resource]
+                datasource = app.config["SOURCES"][resource]
             except KeyError:
                 continue
 
             if datasource.get("source") != resource:  # core types only
                 continue
 
-            if datasource.get("source").endswith(self.app.config["VERSIONS"]):
+            if datasource.get("source").endswith(app.config["VERSIONS"]):
                 continue
 
             if not is_elastic(datasource):
@@ -396,7 +401,7 @@ class Elastic(DataLayer):
         return elastic_resources
 
     def _resource_mapping(self, resource):
-        resource_config = self.app.config["DOMAIN"][resource]
+        resource_config = app.config["DOMAIN"][resource]
         properties = self._get_mapping_properties(
             resource_config, parent=self._get_parent_type(resource)
         )
@@ -559,7 +564,7 @@ class Elastic(DataLayer):
         argument value is expected to be '0' or '1'
         """
         try:
-            return self.app.config.get("ELASTICSEARCH_AUTO_AGGREGATIONS") or bool(
+            return app.config.get("ELASTICSEARCH_AUTO_AGGREGATIONS") or bool(
                 req.args and int(req.args.get("aggregations"))
             )
         except (AttributeError, TypeError):
@@ -779,8 +784,8 @@ class Elastic(DataLayer):
         """Parse hits response into documents."""
         datasource = self.get_datasource(resource)
         schema = {}
-        schema.update(config.DOMAIN[datasource[0]].get("schema", {}))
-        schema.update(config.DOMAIN[resource].get("schema", {}))
+        schema.update(app.config["DOMAIN"][datasource[0]].get("schema", {}))
+        schema.update(app.config["DOMAIN"][resource].get("schema", {}))
         dates = get_dates(schema)
         docs = []
         for hit in hits.get("hits", {}).get("hits", []):
@@ -802,7 +807,7 @@ class Elastic(DataLayer):
         return args
 
     def _get_parent_type(self, resource):
-        resource_config = self.app.config["DOMAIN"][resource] or {}
+        resource_config = app.config["DOMAIN"][resource] or {}
         return resource_config.get("datasource", {}).get("elastic_parent", {})
 
     def get_parent_id(self, resource, document):
@@ -861,14 +866,14 @@ class Elastic(DataLayer):
         Resource can specify ``elastic_prefix`` which behaves same like ``mongo_prefix``.
         """
         px = "ELASTICSEARCH"
-        if resource and config.DOMAIN[resource].get("elastic_prefix"):
-            px = config.DOMAIN[resource].get("elastic_prefix")
+        if resource and app.config["DOMAIN"][resource].get("elastic_prefix"):
+            px = app.config["DOMAIN"][resource].get("elastic_prefix")
         return px
 
     def _resource_config(self, resource, key, default=None):
         """Get config using resource elastic prefix (if any)."""
         px = self._resource_prefix(resource)
-        return self.app.config.get("%s_%s" % (px, key), default)
+        return app.config.get("%s_%s" % (px, key), default)
 
     def elastic(self, resource):
         """Get ElasticSearch instance for given resource."""
@@ -883,7 +888,7 @@ class Elastic(DataLayer):
 
     def _get_retry_on_conflict(self):
         """ Get the retry on settings"""
-        return self.app.config.get("ELASTICSEARCH_RETRY_ON_CONFLICT", 5)
+        return app.config.get("ELASTICSEARCH_RETRY_ON_CONFLICT", 5)
 
     def drop_index(self):
         for resource in self._get_elastic_resources():
