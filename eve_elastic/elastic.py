@@ -1,4 +1,5 @@
 import ast
+import types
 import arrow
 import ciso8601
 import pytz  # NOQA
@@ -6,8 +7,7 @@ import logging
 import elasticsearch
 
 from bson import ObjectId
-from elasticsearch.helpers import bulk, reindex as reindex_new
-from .helpers import reindex as reindex_old
+from elasticsearch.helpers import bulk, reindex
 
 from uuid import uuid4
 from flask import request, abort, json
@@ -98,14 +98,6 @@ def generate_index_name(alias):
     return "{}_{}".format(alias, random)
 
 
-def reindex(es, source, dest):
-    version = es.info().get("version").get("number")
-    if version.startswith("1."):
-        return reindex_old(es, source, dest)
-    else:
-        return reindex_new(es, source, dest)
-
-
 def fix_mapping(mapping, top=True):
     if isinstance(mapping, list):
         return [fix_mapping(_mapping, top=False) for _mapping in mapping]
@@ -125,10 +117,6 @@ def fix_mapping(mapping, top=True):
             new_mapping[key]['type'] = 'text'
         else:
             new_mapping[key] = fix_mapping(val, top=False)
-
-    if top:
-        print('fix mapping', json.dumps(mapping, indent=2), 'to', json.dumps(new_mapping, indent=2))
-
     return new_mapping
 
     if mapping.get("fields"):
@@ -188,7 +176,7 @@ def fix_query(query, top=True):
         merge_queries(new_query['query']['bool'], 'filter', filter_)
 
     if top:
-        print('old', json.dumps(query, indent=2), 'new', json.dumps(new_query, indent=2))
+        print('old', json.dumps(query, indent=2, default=ElasticJSONSerializer().default), 'new', json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default))
     return new_query
 
 
@@ -208,6 +196,8 @@ class ElasticJSONSerializer(elasticsearch.JSONSerializer):
     def default(self, value):
         """Convert mongo.ObjectId."""
         if isinstance(value, ObjectId):
+            return str(value)
+        elif isinstance(value, types.FunctionType):
             return str(value)
         return super(ElasticJSONSerializer, self).default(value)
 
@@ -316,14 +306,13 @@ class Elastic(DataLayer):
             mappings = self._resource_mapping(resource)
             self._init_index(es, index, settings, mappings)
 
-    def _init_index(self, es, index, settings=None, mappings=None):
+    def _init_index(self, es, index, settings=None, mapping=None):
         if not es.indices.exists(index):
-            self._create_index(es, index, settings)
+            self._create_index_from_alias(es, index, settings)
         elif settings:
             self._put_settings(es, index, settings)
-        if mappings:
-            assert 'string' not in json.dumps(fix_mapping(mappings)), 'error index={} {}'.format(index, json.dumps(mappings, indent=2))
-            self._put_mappings(es, index, fix_mapping(mappings))
+        if mapping:
+            self._put_mapping(es, index, mapping)
 
     def get_datasource(self, resource):
         return getattr(self, "_datasource", self.datasource)(resource)
@@ -357,40 +346,43 @@ class Elastic(DataLayer):
             return {"type": "keyword"}
         elif schema["type"] == "string":
             return {"type": "text"}
+        elif schema["type"] == 'integer':
+            return {"type": 'integer'}
 
-    def _create_index(self, es, index, settings=None, mappings=None):
+    def _create_index_from_alias(self, es, alias, settings=None):
         """Create new index and ignore if it exists already."""
         try:
-            alias = index
             index = generate_index_name(alias)
-
-            args = {"index": index, "body": {}}
-
-            if settings:
-                args["body"].update(settings)
-            if mappings:
-                args["body"].update({"mappings": mappings})
-
-            es.indices.create(**args)
+            self._create_index(es, index, settings)
             es.indices.put_alias(index, alias)
             logger.info("created index alias=%s index=%s" % (alias, index))
         except elasticsearch.TransportError:  # index exists
             pass
 
+    def _create_index(self, es, index, settings=None):
+        args = {"index": index, "body": {}}
+        if settings:
+            args["body"].update(settings)
+        es.indices.create(**args)
+
     def _get_elastic_resources(self):
         elastic_resources = {}
-        for resource, resource_config in self.app.config["DOMAIN"].items():
-            datasource = resource_config.get("datasource", {})
+        for resource in self.app.config["DOMAIN"]:
+            try:
+                datasource = self.app.config['SOURCES'][resource]
+            except KeyError:
+                continue
+
+            if datasource.get("source") != resource:  # core types only
+                continue
+            
+            if datasource.get("source").endswith(self.app.config['VERSIONS']):
+                continue
 
             if not is_elastic(datasource):
                 continue
 
-            if (
-                datasource.get("source", resource) != resource
-            ):  # only put mapping for core types
-                continue
-
-            elastic_resources[resource] = resource_config
+            elastic_resources[resource] = datasource
         return elastic_resources
 
     def _resource_mapping(self, resource):
@@ -416,8 +408,9 @@ class Elastic(DataLayer):
         properties["properties"].pop("_id", None)
         return properties
 
-    def _put_mappings(self, es, index, mappings):
-        es.indices.put_mapping(index=index, body=mappings)
+    def _put_mapping(self, es, index, mapping=None):
+        if mapping:
+            es.indices.put_mapping(index=index, body=fix_mapping(mapping))
 
     def get_mapping(self, resource):
         """Get mapping for resource.
@@ -436,6 +429,11 @@ class Elastic(DataLayer):
         index = self._resource_index(resource)
         settings = self.elastic(resource).indices.get_settings(index=index)
         return next(iter(settings.values()))
+    
+    def get_index(self, resource):
+        alias = self._resource_index(resource)
+        info = self.elastic(resource).indices.get_alias(name=alias)
+        return next(iter(info.keys()))
 
     def get_index_by_alias(self, alias):
         """Get index name for given alias.
@@ -789,7 +787,6 @@ class Elastic(DataLayer):
                 RESOURCE_FIELD,
                 config.ETAG,
             ])
-            print('projection', args['_source'])
 
         if refresh:
             args["refresh"] = refresh
@@ -842,12 +839,12 @@ class Elastic(DataLayer):
         )
         return indexes.get(datasource[0], default_index)
 
-    def _refresh_resource_index(self, resource):
+    def _refresh_resource_index(self, resource, force=False):
         """Refresh index for given resource.
 
         :param resource: resource name
         """
-        if self._resource_config(resource, "FORCE_REFRESH", True):
+        if self._resource_config(resource, "FORCE_REFRESH", True) or force:
             self.elastic(resource).indices.refresh(self._resource_index(resource))
 
     def _resource_prefix(self, resource=None):
@@ -904,11 +901,42 @@ class Elastic(DataLayer):
             resources = resources.split(",")
         index = [self._resource_index(resource) for resource in resources]
         try:
-            print('search', ','.join(index))
             hits = self.elastic(resources[0]).search(body=fix_query(query), index=index, **params)
             return self._parse_hits(hits, resources[0])
         except elasticsearch.exceptions.RequestError:
             raise
+    
+    def reindex(self, resource):
+        es = self.elastic(resource)
+        alias = self._resource_index(resource)
+        settings = self._resource_config(resource, "SETTINGS")
+        mapping = self._resource_mapping(resource)
+        old_index = self.get_index(resource)
+
+        # create new index
+        index = generate_index_name(alias)
+        print('create', index)
+        self._create_index(es, index, settings)
+        self._put_mapping(es, index, mapping)
+
+        # reindex data
+        print('reindex', alias, index)
+        reindex(es, alias, index)
+
+        # remove old alias
+        print('remove alias', alias, old_index)
+        es.indices.delete_alias(index=old_index, name=alias)
+
+        # remove old index
+        print('remove index', old_index)
+        es.indices.delete(old_index)
+
+        # create alias for new index
+        print('put', alias, index)
+        es.indices.put_alias(index=index, name=alias)
+
+        print('refresh', index)
+        es.indices.refresh(index)
 
 
 def build_elastic_query(doc):
