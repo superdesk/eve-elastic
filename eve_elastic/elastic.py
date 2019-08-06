@@ -311,7 +311,10 @@ class Elastic(DataLayer):
             index = self._resource_index(resource)
             settings = self._resource_config(resource, "SETTINGS")
             mappings = self._resource_mapping(resource)
-            self._init_index(es, index, settings, mappings)
+            try:
+                self._init_index(es, index, settings, mappings)
+            except elasticsearch.exceptions.RequestError:
+                logger.error("mapping error, updating settings resource=%s", resource)
 
     def _init_index(self, es, index, settings=None, mapping=None):
         if not es.indices.exists(index):
