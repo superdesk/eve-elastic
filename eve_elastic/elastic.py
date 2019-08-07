@@ -169,7 +169,10 @@ def fix_query(query, top=True):
         elif key == "bool":
             new_query.setdefault("bool", {})
             for _key, _val in val.items():
-                merge_queries(new_query["bool"], _key, fix_query(_val, top=False))
+                if _key == "minimum_should_match":
+                    new_query["bool"][_key] = _val
+                else:
+                    merge_queries(new_query["bool"], _key, fix_query(_val, top=False))
         else:
             new_query[key] = fix_query(val, top=False)
 
@@ -236,7 +239,9 @@ class ElasticCursor(object):
         hits = self.hits.get("hits")
         if hits:
             total = hits.get("total")
-            if total and total.get("value"):
+            if isinstance(total, int):
+                return total
+            elif total and total.get("value"):
                 return int(total["value"])
         return 0
 
@@ -414,6 +419,7 @@ class Elastic(DataLayer):
                 config.DATE_CREATED: self._get_field_mapping({"type": "datetime"}),
                 config.LAST_UPDATED: self._get_field_mapping({"type": "datetime"}),
                 RESOURCE_FIELD: {"type": "keyword"},
+                config.VERSION: {"type": "keyword"},
             }
         )
 
@@ -599,7 +605,7 @@ class Elastic(DataLayer):
         """
         try:
             args = getattr(req, "args", {})
-            return ",".join(json.loads(args.get("projections")))
+            return ",".join([RESOURCE_FIELD] + json.loads(args.get("projections")))
         except (AttributeError, TypeError):
             return None
 
@@ -676,6 +682,12 @@ class Elastic(DataLayer):
         return self._parse_hits(
             self.elastic(resource).mget(body={"ids": ids}, **args), resource
         )
+
+    def find_by_id(self, _id, resources):
+        for resource in resources:
+            doc = self._find_by_id(resource, _id)
+            if doc:
+                return doc
 
     def insert(self, resource, doc_or_docs, **kwargs):
         """Insert document, it must be new if there is ``_id`` in it."""
@@ -832,7 +844,9 @@ class Elastic(DataLayer):
         """Get projection fields for given resource."""
         datasource = self.get_datasource(resource)
         keys = datasource[2].keys()
-        return ",".join(keys) + ",".join([config.LAST_UPDATED, config.DATE_CREATED])
+        return ",".join(keys) + ",".join(
+            [config.LAST_UPDATED, config.DATE_CREATED, RESOURCE_FIELD]
+        )
 
     def _default_sort(self, resource):
         datasource = self.get_datasource(resource)
