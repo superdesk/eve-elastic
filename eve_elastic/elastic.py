@@ -118,9 +118,6 @@ def fix_mapping(mapping, top=True):
         else:
             new_mapping[key] = fix_mapping(val, top=False)
 
-    if top:
-        print("fixed", json.dumps(new_mapping, indent=2))
-
     return new_mapping
 
 
