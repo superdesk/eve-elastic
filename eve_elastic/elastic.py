@@ -178,13 +178,6 @@ def fix_query(query, top=True):
         new_query["query"].setdefault("bool", {})
         merge_queries(new_query["query"]["bool"], "filter", filter_)
 
-    if top:
-        print(
-            "old",
-            json.dumps(query, indent=2, default=ElasticJSONSerializer().default),
-            "new",
-            json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default),
-        )
     return new_query
 
 
