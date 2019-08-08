@@ -145,6 +145,7 @@ class TestElastic(TestCase):
         settings["ELASTICSEARCH_INDEX"] = INDEX
         settings["FOO_URL"] = settings["ELASTICSEARCH_URL"]
         settings["FOO_INDEX"] = "foo"
+        settings["DEBUG"] = True
         self.es = elasticsearch.Elasticsearch([settings["ELASTICSEARCH_URL"]])
         self.app = eve.Eve(settings=settings, data=Elastic)
         with self.app.app_context():
@@ -413,7 +414,9 @@ class TestElastic(TestCase):
                 )
             }
             fields = self.app.data.get_projected_fields(req)
-            self.assertEqual(fields, "priority,urgency,word_count,slugline,highlights")
+            self.assertEqual(
+                fields, "priority,urgency,word_count,slugline,highlights,_resource"
+            )
 
     def test_should_highlight(self):
         with self.app.app_context():

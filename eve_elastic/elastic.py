@@ -117,13 +117,11 @@ def fix_mapping(mapping, top=True):
             new_mapping[key]["type"] = "text"
         else:
             new_mapping[key] = fix_mapping(val, top=False)
+
+    if top:
+        print("fixed", json.dumps(new_mapping, indent=2))
+
     return new_mapping
-
-    if mapping.get("fields"):
-        for field, field_mapping in mapping.get("fields").items():
-            fix_mapping(field_mapping)
-
-    return mapping
 
 
 def merge_queries(dest, key, value):
@@ -324,7 +322,12 @@ class Elastic(DataLayer):
             try:
                 self._init_index(es, index, settings, mappings)
             except elasticsearch.exceptions.RequestError:
-                logger.error("mapping error, updating settings resource=%s", resource)
+                if app.config.get("DEBUG"):
+                    raise
+                else:
+                    logger.error(
+                        "mapping error, updating settings resource=%s", resource
+                    )
 
     def _init_index(self, es, index, settings=None, mapping=None):
         if not es.indices.exists(index):
@@ -414,14 +417,16 @@ class Elastic(DataLayer):
 
     def _get_mapping_properties(self, resource_config, parent=None):
         properties = self._generate_mapping(resource_config["schema"])
-        properties["properties"].update(
-            {
-                config.DATE_CREATED: self._get_field_mapping({"type": "datetime"}),
-                config.LAST_UPDATED: self._get_field_mapping({"type": "datetime"}),
-                RESOURCE_FIELD: {"type": "keyword"},
-                config.VERSION: {"type": "keyword"},
-            }
-        )
+        system_fields = {
+            config.DATE_CREATED: self._get_field_mapping({"type": "datetime"}),
+            config.LAST_UPDATED: self._get_field_mapping({"type": "datetime"}),
+            RESOURCE_FIELD: {"type": "keyword"},
+        }
+
+        if config.VERSION != "_version":  # elastic uses _version
+            system_fields[config.VERSION] = {"type": "keyword"}
+
+        properties["properties"].update(system_fields)
 
         if parent:
             properties.update({"_parent": {"type": parent.get("type")}})
@@ -605,7 +610,7 @@ class Elastic(DataLayer):
         """
         try:
             args = getattr(req, "args", {})
-            return ",".join([RESOURCE_FIELD] + json.loads(args.get("projections")))
+            return ",".join(json.loads(args.get("projections")) + [RESOURCE_FIELD])
         except (AttributeError, TypeError):
             return None
 
