@@ -3,11 +3,17 @@ language: python
 services:
     - docker
 
+env:
+    matrix:
+        - ELASTIC_VERSION=7.2.1
+        - ELASTIC_VERSION=7.3.0
+
 install:
-    - docker-compose up -d
+    - docker pull "docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}"
+    - docker run -d -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" "docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}"
     - pip install -r requirements.txt
     - pip install .
 
 script:
-    - black --check eve_elastic test *.py
     - nosetests
+    - black --check eve_elastic test *.py
