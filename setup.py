@@ -13,7 +13,7 @@ with open("LICENSE") as f:
 
 setup(
     name="Eve-Elastic",
-    version="2.5.0",
+    version="7.0.0",
     description="Elasticsearch data layer for eve rest framework",
     long_description=readme + "\n\n" + changelog,
     license=license,
