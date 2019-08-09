@@ -8,15 +8,12 @@ with open("README.rst") as f:
 with open("CHANGELOG.rst") as f:
     changelog = f.read()
 
-with open("LICENSE") as f:
-    license = f.read()
-
 setup(
     name="Eve-Elastic",
     version="7.0.0",
     description="Elasticsearch data layer for eve rest framework",
     long_description=readme + "\n\n" + changelog,
-    license=license,
+    license="GPLv3+",
     author="Petr Jasek",
     author_email="petr.jasek@sourcefabric.org",
     url="https://github.com/petrjasek/eve-elastic",

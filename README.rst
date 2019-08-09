@@ -1,10 +1,10 @@
 Eve-Elastic
 ===========
 
-.. image:: https://travis-ci.org/petrjasek/eve-elastic.png?branch=master
-        :target: https://travis-ci.org/petrjasek/eve-elastic
+.. image:: https://travis-ci.org/petrjasek/eve-elastic.png?branch=elastic7
+   :target: https://travis-ci.org/petrjasek/eve-elastic
 
-Eve-Elastic is `elasticsearch <http://www.elasticsearch.org>`_ data layer for `eve REST framework <http://python-eve.org>`_.
+Eve-Elastic is `elastic <http://www.elasticsearch.org>`_ data layer for `eve REST framework <http://python-eve.org>`_.
 
 Features
 --------
@@ -22,16 +22,14 @@ Eve-Elastic is `GPLv3 <http://www.gnu.org/licenses/gpl-3.0.txt>`_ licensed.
 Supported elastic versions
 --------------------------
 
-It supports ``1.7`` and ``2.x`` versions. If you limit your queries to those which work
-with both you can have single codebase for both.
-
+It supports elastic ``7`` versions. 
 
 Install
 -------
 
 .. code-block:: bash
 
-    $ pip install Eve-Elastic
+   $ pip install Eve-Elastic
 
 Usage
 -----
@@ -67,7 +65,6 @@ On top of this, there is a predefined `query_string <http://www.elasticsearch.or
 
 - ``q`` - query (default: ``*``)
 - ``df`` - default field (default: ``_all``)
-
 
 Filtering
 ---------
