@@ -22,6 +22,10 @@ logger = logging.getLogger("elastic")
 RESOURCE_FIELD = "_resource"
 
 
+def json_dumps(data):
+    return json.dumps(data, indent=2, default=ElasticJSONSerializer().default)
+
+
 def parse_date(date_str):
     """Parse elastic datetime string."""
     if not date_str:
@@ -182,6 +186,9 @@ def fix_query(query, top=True):
         new_query.setdefault("query", {})
         new_query["query"].setdefault("bool", {})
         merge_queries(new_query["query"]["bool"], "filter", filter_)
+
+    if top:
+        print("fix", json_dumps(query), "new", json_dumps(new_query))
 
     return new_query
 
