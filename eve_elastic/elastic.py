@@ -168,6 +168,11 @@ def fix_query(query, top=True):
                     new_query["bool"][_key] = _val
                 else:
                     merge_queries(new_query["bool"], _key, fix_query(_val, top=False))
+        elif key == "nested" and val.get("filter"):
+            new_query[key] = {
+                "path": val.get("path"),
+                "query": {"bool": {"filter": fix_query(val["filter"], top=False)}},
+            }
         else:
             new_query[key] = fix_query(val, top=False)
 
