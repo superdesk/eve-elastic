@@ -22,6 +22,10 @@ logger = logging.getLogger("elastic")
 RESOURCE_FIELD = "_resource"
 
 
+def json_dumps(data):
+    return json.dumps(data, indent=2, default=ElasticJSONSerializer().default)
+
+
 def parse_date(date_str):
     """Parse elastic datetime string."""
     if not date_str:

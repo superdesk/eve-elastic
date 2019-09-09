@@ -18,7 +18,9 @@ install:
     - docker run -d -p 9200:9200 -e "discovery.type=single-node" "docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}"
     - pip install -r requirements.txt
     - pip install .
+    - ./scripts/wait-for-elastic.sh
 
 script:
-    - nosetests
     - black --check eve_elastic test *.py
+    - nosetests
+
