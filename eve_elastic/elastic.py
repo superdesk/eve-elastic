@@ -177,11 +177,7 @@ def fix_query(query, top=True):
         elif key == "nested" and val and val.get("filter"):
             new_query[key] = {
                 "path": val["path"],
-                "query": {
-                    "bool": {
-                        "filter": fix_query(val["filter"], top=False),
-                    },
-                },
+                "query": {"bool": {"filter": fix_query(val["filter"], top=False)}},
             }
         else:
             new_query[key] = fix_query(val, top=False)
@@ -194,7 +190,10 @@ def fix_query(query, top=True):
         merge_queries(new_query["query"]["bool"], "filter", filter_)
 
     if top:
-        logger.debug('query %s', json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default))
+        logger.debug(
+            "query %s",
+            json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default),
+        )
 
     return new_query
 
