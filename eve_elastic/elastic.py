@@ -160,6 +160,9 @@ def fix_query(query, top=True):
         elif key == "and":
             new_query.setdefault("bool", {})
             merge_queries(new_query["bool"], "must", fix_query(val, top=False))
+        elif key == "not" and val.get("filter"):
+            new_query.setdefault("bool", {})
+            new_query["bool"] = {"must_not": fix_query(val["filter"], top=False)}
         elif key == "not":
             new_query.setdefault("bool", {})
             new_query["bool"] = {"must_not": fix_query(val, top=False)}
@@ -191,7 +194,8 @@ def fix_query(query, top=True):
 
     if top:
         logger.debug(
-            "query %s",
+            "query %s fixed %s",
+            json.dumps(query, indent=2, default=ElasticJSONSerializer().default),
             json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default),
         )
 
