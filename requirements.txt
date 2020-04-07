@@ -1,3 +1,4 @@
 nose
 black
 mock
+werkzeug<1.0
