@@ -812,6 +812,19 @@ class TestElastic(TestCase):
             docs = self.app.data.search({}, "items,archived_items")
             self.assertEqual(2, docs.count())
 
+    def test_bulk_insert_with_version(self):
+        with self.app.app_context():
+            self.app.data.bulk_insert(
+                "items",
+                [
+                    {"uri": "foo", "name": "item1", "version": 1},
+                    {"_id": "bar", "uri": "bar", "name": "item2", "version": 2},
+                ],
+            )
+
+            item1 = self.app.data.find_one("items", req=None, _id="bar")
+            self.assertIsNotNone(item1)
+
 
 class TestElasticSearchWithSettings(TestCase):
     resource = "items"

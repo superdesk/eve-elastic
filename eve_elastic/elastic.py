@@ -722,11 +722,16 @@ class Elastic(DataLayer):
         """Bulk insert documents."""
         kwargs.update(self._es_args(resource))
         parent_type = self._get_parent_type(resource)
+        actions = []
         for doc in docs:
             doc[RESOURCE_FIELD] = resource
             if parent_type and doc.get(parent_type.get("field")):
                 doc["_parent"] = doc.get(parent_type.get("field"))
-        res = bulk(self.elastic(resource), docs, stats_only=False, **kwargs)
+            action = {"_source": self._prepare_for_storage(resource, doc, kwargs)}
+            if doc.get("_id"):
+                action["_id"] = doc["_id"]
+            actions.append(action)
+        res = bulk(self.elastic(resource), actions, stats_only=False, **kwargs)
         self._refresh_resource_index(resource)
         return res
 
