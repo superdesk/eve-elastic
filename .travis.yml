@@ -1,14 +1,18 @@
 language: python
 
-cache:
-  - pip
+dist: bionic
+
+cache: pip
 
 services:
     - docker
 
 env:
     matrix:
-        - ELASTIC_VERSION=7.3.0
+        - ELASTIC_VERSION=7.6.2
+        - ELASTIC_VERSION=7.5.2
+        - ELASTIC_VERSION=7.4.2
+        - ELASTIC_VERSION=7.3.2
         - ELASTIC_VERSION=7.2.1
         - ELASTIC_VERSION=7.1.1
         - ELASTIC_VERSION=7.0.1
