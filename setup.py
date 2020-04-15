@@ -10,7 +10,7 @@ with open("CHANGELOG.rst") as f:
 
 setup(
     name="Eve-Elastic",
-    version="7.0.4",
+    version="7.0.5",
     description="Elasticsearch data layer for eve rest framework",
     long_description=readme + "\n\n" + changelog,
     license="GPLv3+",
