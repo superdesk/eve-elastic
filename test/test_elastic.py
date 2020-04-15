@@ -825,6 +825,22 @@ class TestElastic(TestCase):
             item1 = self.app.data.find_one("items", req=None, _id="bar")
             self.assertIsNotNone(item1)
 
+    def test_filtered_query(self):
+        with self.app.app_context():
+            self.app.data.insert("items", [{"uri": "foo", "name": "item"}])
+            docs = self.app.data.search(
+                {
+                    "query": {
+                        "filtered": {
+                            "filter": {"term": {"uri": "foo"},},
+                            "query": {"query_string": {"query": "foo",},},
+                        }
+                    }
+                },
+                "items",
+            )
+            self.assertEqual(1, docs.count())
+
 
 class TestElasticSearchWithSettings(TestCase):
     resource = "items"

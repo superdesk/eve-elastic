@@ -19,7 +19,7 @@ env:
 
 install:
     - docker pull "docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}"
-    - docker run -d -p 9200:9200 -e "discovery.type=single-node" "docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}"
+    - docker run -d -p 9200:9200 -e "discovery.type=single-node" --tmpfs "/usr/share/elasticsearch/data" "docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}"
     - pip install -r requirements.txt
     - pip install .
     - ./scripts/wait-for-elastic.sh
