@@ -182,6 +182,11 @@ def fix_query(query, top=True):
                 "path": val["path"],
                 "query": {"bool": {"filter": fix_query(val["filter"], top=False)}},
             }
+        elif key == "query_string":
+            new_query[key] = val
+            val.setdefault('lenient', True)
+        elif key == "query" and not top:
+            new_query["bool"] = {"must": fix_query(val, top=False)}
         else:
             new_query[key] = fix_query(val, top=False)
 
@@ -336,6 +341,7 @@ class Elastic(DataLayer):
                 if app.config.get("DEBUG"):
                     raise
                 else:
+                    raise
                     logger.error(
                         "mapping error, updating settings resource=%s", resource
                     )
