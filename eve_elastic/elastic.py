@@ -182,9 +182,12 @@ def fix_query(query, top=True):
                 "path": val["path"],
                 "query": {"bool": {"filter": fix_query(val["filter"], top=False)}},
             }
+        elif key == "nested" and val and val.get("query"):
+            new_query[key] = val
+            new_query[key]["query"] = fix_query(val["query"], top=False)
         elif key == "query_string":
             new_query[key] = val
-            val.setdefault('lenient', True)
+            val.setdefault("lenient", True)
         elif key == "query" and not top:
             new_query["bool"] = {"must": fix_query(val, top=False)}
         else:

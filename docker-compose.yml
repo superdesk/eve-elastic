@@ -1,6 +1,10 @@
-elastic:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
-    ports:
-        - "9200:9200"
-    environment:
-        - discovery.type=single-node
+version: "2.4"
+services:
+    elastic:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+        ports:
+            - "9200:9200"
+        environment:
+            - discovery.type=single-node
+        tmpfs:
+            - /usr/share/elasticsearch/data
