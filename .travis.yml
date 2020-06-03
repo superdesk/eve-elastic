@@ -9,6 +9,7 @@ services:
 
 env:
     matrix:
+        - ELASTIC_VERSION=7.7.0
         - ELASTIC_VERSION=7.6.2
         - ELASTIC_VERSION=7.5.2
         - ELASTIC_VERSION=7.4.2

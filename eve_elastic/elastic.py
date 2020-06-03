@@ -645,7 +645,7 @@ class Elastic(DataLayer):
         else:
             args = self._es_args(resource)
             filters = [{"term": {key: val}} for key, val in lookup.items()]
-            query = {"query": {"bool": {"must": [filters]}}}
+            query = {"query": {"bool": {"must": filters}}}
 
             try:
                 args["size"] = 1
