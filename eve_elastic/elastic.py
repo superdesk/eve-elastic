@@ -497,7 +497,7 @@ class Elastic(DataLayer):
     def find(self, resource, req, sub_resource_lookup, **kwargs):
         """Find documents for resource."""
         args = getattr(req, "args", request.args if request else {}) or {}
-        source_config = config.SOURCES[resource]
+        source_config = app.config["DOMAIN"][resource]["datasource"]
 
         if args.get("source"):
             query = json.loads(args.get("source"))
@@ -568,9 +568,9 @@ class Elastic(DataLayer):
                         q["query_string"]
                     )
 
-            if highlights:
-                query["highlight"] = highlights
-                query["highlight"].setdefault("require_field_match", False)
+                    if highlights:
+                        query["highlight"] = highlights
+                        query["highlight"].setdefault("require_field_match", False)
 
         source_projections = None
         if self.should_project(req):
