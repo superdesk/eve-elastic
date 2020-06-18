@@ -344,6 +344,16 @@ class TestElastic(TestCase):
                 'This is <span class="es-highlight">foo</span>',
             )
 
+    def test_search_with_highlight_without_query_string_query(self):
+        with self.app.app_context():
+            req = ParsedRequest()
+            req.args = {
+                "source": json.dumps({"query": {"term": {"name": "foo"}}}),
+                "es_highlight": 1,
+            }
+            res = self.app.data.find("items_with_description", req, None)
+            self.assertEqual(0, res.count())
+
     def test_search_via_source_param_and_without_highlight(self):
         query = {"query": {"query_string": {"query": "foo"}}}
         with self.app.app_context():
