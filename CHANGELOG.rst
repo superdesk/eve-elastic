@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+7.0.7 (2020-06-18)
+++++++++++++++++++
+
+- fix error when highlights are enabled but no query string query is used
+
 7.0.6 (2020-06-03)
 ++++++++++++++++++
 
