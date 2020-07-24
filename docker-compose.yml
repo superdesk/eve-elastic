@@ -1,0 +1,11 @@
+version: "2.4"
+services:
+    elastic:
+        image: elasticsearch:2.4.6
+        ports:
+            - "9200:9200"
+        environment:
+            - "discovery.type=single-node"
+        tmpfs:
+            - "/usr/share/elasticsearch/data"
+
