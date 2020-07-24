@@ -628,14 +628,14 @@ class TestElastic(TestCase):
             self.app.data.init_index()
 
         self.assertTrue(self.es.indices.exists(archived_index))
-        self.assertEqual(0, self.es.count(archived_index, archived_type)['count'])
+        self.assertEqual(0, self.es.count(index=archived_index, doc_type=archived_type)['count'])
 
         with self.app.app_context():
             self.app.data.insert(archived_type, [
                 {'name': 'foo', 'archived': '2013-01-01T11:12:13+0000'},
             ])
 
-        self.assertEqual(1, self.es.count(archived_index, archived_type)['count'])
+        self.assertEqual(1, self.es.count(index=archived_index, doc_type=archived_type)['count'])
 
         with self.app.app_context():
             item = self.app.data.find_one(archived_type, req=None, name='foo')
