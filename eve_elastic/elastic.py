@@ -626,6 +626,7 @@ class Elastic(DataLayer):
         for doc in doc_or_docs:
             self._update_parent_args(resource, kwargs, doc)
             _id = doc.pop('_id', None)
+            print('args', kwargs)
             res = self.elastic(resource).index(body=doc, id=_id, **kwargs)
             doc.setdefault('_id', res.get('_id', _id))
             ids.append(doc.get('_id'))
