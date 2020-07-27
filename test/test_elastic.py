@@ -1401,3 +1401,109 @@ class TestElasticInnerHits(TestCase):
             self.assertEqual(results[0].get("_inner_hits")["service"][0]["code"], "a")
             self.assertEqual(results[1].get("_id"), "bar")
             self.assertEqual(results[1].get("_inner_hits")["service"][0]["code"], "a")
+
+
+class TestElasticNested(TestCase):
+    index_name = "elastic_nested"
+    data = [
+        {
+            "_id": "foo",
+            "name": "foo",
+            "headline": "foo test",
+            "schedule": [
+                {"due": "2012-08-10T12:12:13+0000"},
+                {"due": "2012-09-10T12:12:13+0000"},
+                {"due": "2012-10-10T12:12:13+0000"},
+            ],
+        },
+        {
+            "_id": "bar",
+            "name": "bar",
+            "headline": "bar test",
+            "schedule": [
+                {"due": "2012-09-10T09:12:13+0000"},
+                {"due": "2012-10-10T09:12:13+0000"},
+                {"due": "2012-11-10T09:12:13+0000"},
+            ],
+        },
+    ]
+
+    domain = {
+        "items": {
+            "schema": {
+                "name": {"type": "string"},
+                "headline": {"type": "string"},
+                "schedule": {
+                    "type": "object",
+                    "mapping": {
+                        "type": "nested",
+                        "properties": {
+                            "due": {"type": "date"},
+                        },
+                    },
+                },
+            },
+            "datasource": {"backend": "elastic"},
+        }
+    }
+
+    def setUp(self):
+        settings = {
+            "DOMAIN": self.domain,
+            "ELASTICSEARCH_URL": "http://localhost:9200",
+            "ELASTICSEARCH_INDEX": self.index_name,
+            "ELASTICSEARCH_SETTINGS": ELASTICSEARCH_SETTINGS,
+        }
+
+        self.app = eve.Eve(settings=settings, data=Elastic)
+        with self.app.app_context():
+            self.app.data.drop_index()
+            self.app.data.init_index()
+            self.es = get_es(self.app.config.get("ELASTICSEARCH_URL"))
+
+    def test_nested_sort(self):
+        with self.app.app_context():
+            self.app.data.insert("items", self.data)
+            query = {
+                "query": {
+                    "bool": {
+                        "must": [{
+                            "nested": {
+                                "path": "schedule",
+                                "query": {
+                                    "bool": {
+                                        "filter": [{
+                                            "range": {
+                                                "schedule.due": {
+                                                    "gte": "2012-09-10T08:00:00+0000"
+                                                }
+                                            }
+                                        }]
+                                    }
+                                }
+                            }
+                        }]
+                    }
+                },
+                "sort": [{
+                    "schedule.due": {
+                        "order": "asc",
+                        "nested": {
+                            "path": "schedule",
+                            "filter": {
+                                "range": {
+                                    "schedule.due": {
+                                        "gte": "2012-09-10T08:00:00+0000"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }]
+            }
+            req = ParsedRequest()
+            req.args = {"source": json.dumps(query)}
+            results = self.app.data.find("items", req, None)
+            self.assertEqual(2, results.count())
+            self.assertEqual(results[0].get("_id"), "bar")
+            self.assertEqual(results[1].get("_id"), "foo")

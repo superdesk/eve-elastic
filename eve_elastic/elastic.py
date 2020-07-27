@@ -135,9 +135,9 @@ def merge_queries(dest, key, value):
         dest[key].append(value)
 
 
-def fix_query(query, top=True):
+def fix_query(query, top=True, context=None):
     if isinstance(query, list):
-        return [fix_query(_query, top=False) for _query in query]
+        return [fix_query(_query, top=False, context=context) for _query in query]
     elif not isinstance(query, dict):
         return query
 
@@ -147,51 +147,59 @@ def fix_query(query, top=True):
             new_query.setdefault("bool", {})
             if val.get("filter"):
                 merge_queries(
-                    new_query["bool"], "filter", fix_query(val["filter"], top=False)
+                    new_query["bool"], "filter", fix_query(val["filter"], top=False, context=context)
                 )
             if val.get("query"):
                 merge_queries(
-                    new_query["bool"], "must", fix_query(val["query"], top=False)
+                    new_query["bool"], "must", fix_query(val["query"], top=False, context=context)
                 )
         elif key == "or":
             new_query.setdefault("bool", {})
-            merge_queries(new_query["bool"], "should", fix_query(val, top=False))
+            merge_queries(new_query["bool"], "should", fix_query(val, top=False, context=context))
             new_query["bool"]["minimum_should_match"] = 1
         elif key == "and":
             new_query.setdefault("bool", {})
-            merge_queries(new_query["bool"], "must", fix_query(val, top=False))
+            merge_queries(new_query["bool"], "must", fix_query(val, top=False, context=context))
         elif key == "not" and val.get("filter"):
             new_query.setdefault("bool", {})
-            new_query["bool"] = {"must_not": fix_query(val["filter"], top=False)}
+            new_query["bool"] = {"must_not": fix_query(val["filter"], top=False, context=context)}
         elif key == "not":
             new_query.setdefault("bool", {})
-            new_query["bool"] = {"must_not": fix_query(val, top=False)}
+            new_query["bool"] = {"must_not": fix_query(val, top=False, context=context)}
         elif key == "_type":
-            new_query[RESOURCE_FIELD] = fix_query(val, top=False)
+            new_query[RESOURCE_FIELD] = fix_query(val, top=False, context=context)
         elif key == "bool":
             new_query.setdefault("bool", {})
             for _key, _val in val.items():
                 if _key == "minimum_should_match":
                     new_query["bool"][_key] = _val
                 else:
-                    merge_queries(new_query["bool"], _key, fix_query(_val, top=False))
+                    merge_queries(new_query["bool"], _key, fix_query(_val, top=False, context=context))
         elif key == "filter" and not val:
             continue  # ignore empty filter
         elif key == "nested" and val and val.get("filter"):
-            new_query[key] = {
-                "path": val["path"],
-                "query": {"bool": {"filter": fix_query(val["filter"], top=False)}},
-            }
+            if context == "sort":
+                new_query[key] = {
+                    "path": val["path"],
+                    "filter": fix_query(val["filter"], top=False, context=context),
+                }
+            else:
+                new_query[key] = {
+                    "path": val["path"],
+                    "query": {"bool": {"filter": fix_query(val["filter"], top=False, context=context)}},
+                }
         elif key == "nested" and val and val.get("query"):
             new_query[key] = val
-            new_query[key]["query"] = fix_query(val["query"], top=False)
+            new_query[key]["query"] = fix_query(val["query"], top=False, context=context)
         elif key == "query_string":
             new_query[key] = val
             val.setdefault("lenient", True)
         elif key == "query" and not top:
-            new_query["bool"] = {"must": fix_query(val, top=False)}
+            new_query["bool"] = {"must": fix_query(val, top=False, context=context)}
+        elif top:
+            new_query[key] = fix_query(val, top=False, context=key)
         else:
-            new_query[key] = fix_query(val, top=False)
+            new_query[key] = fix_query(val, top=False, context=context)
 
     # handle top level filter if any
     if top and new_query.get("filter"):
