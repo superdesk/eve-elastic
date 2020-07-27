@@ -1437,9 +1437,7 @@ class TestElasticNested(TestCase):
                     "type": "object",
                     "mapping": {
                         "type": "nested",
-                        "properties": {
-                            "due": {"type": "date"},
-                        },
+                        "properties": {"due": {"type": "date"},},
                     },
                 },
             },
@@ -1467,39 +1465,45 @@ class TestElasticNested(TestCase):
             query = {
                 "query": {
                     "bool": {
-                        "must": [{
-                            "nested": {
-                                "path": "schedule",
-                                "query": {
-                                    "bool": {
-                                        "filter": [{
-                                            "range": {
-                                                "schedule.due": {
-                                                    "gte": "2012-09-10T08:00:00+0000"
+                        "must": [
+                            {
+                                "nested": {
+                                    "path": "schedule",
+                                    "query": {
+                                        "bool": {
+                                            "filter": [
+                                                {
+                                                    "range": {
+                                                        "schedule.due": {
+                                                            "gte": "2012-09-10T08:00:00+0000"
+                                                        }
+                                                    }
                                                 }
-                                            }
-                                        }]
-                                    }
+                                            ]
+                                        }
+                                    },
                                 }
                             }
-                        }]
+                        ]
                     }
                 },
-                "sort": [{
-                    "schedule.due": {
-                        "order": "asc",
-                        "nested": {
-                            "path": "schedule",
-                            "filter": {
-                                "range": {
-                                    "schedule.due": {
-                                        "gte": "2012-09-10T08:00:00+0000"
+                "sort": [
+                    {
+                        "schedule.due": {
+                            "order": "asc",
+                            "nested": {
+                                "path": "schedule",
+                                "filter": {
+                                    "range": {
+                                        "schedule.due": {
+                                            "gte": "2012-09-10T08:00:00+0000"
+                                        }
                                     }
-                                }
-                            }
+                                },
+                            },
                         }
                     }
-                }]
+                ],
             }
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
