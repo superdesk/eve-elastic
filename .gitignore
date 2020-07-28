@@ -2,6 +2,7 @@
 
 # env
 /env
+/venv
 /bin
 /lib
 /include
