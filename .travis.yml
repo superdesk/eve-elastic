@@ -5,16 +5,18 @@ dist: bionic
 cache: pip
 
 services:
-    - docker
+    - elasticsearch
 
 env:
     matrix:
-        - ELASTIC_VERSION=2.4.6
-        - ELASTIC_VERSION=1.7.6
+        - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/2.4.6/elasticsearch-2.4.6.deb
+        - ELASTIC_LINK=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.6.deb
 
 before_install:
-    - docker pull "elasticsearch:${ELASTIC_VERSION}"
-    - docker run -d -p 9200:9200 -e "discovery.type=single-node" --tmpfs "/usr/share/elasticsearch/data" "elasticsearch:${ELASTIC_VERSION}"
+    - curl -O ${ELASTIC_LINK} -o elasticsearch.deb && sudo dpkg -i --force-confnew elasticsearch.deb && sudo service elasticsearch restart
+
+before_script:
+   - sleep 10
 
 script:
     - nosetests
