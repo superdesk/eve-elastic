@@ -4,18 +4,16 @@ dist: bionic
 
 cache: pip
 
-#services:
-#  - elasticsearch
+services:
+  - elasticsearch
 
-env:
-  matrix:
-    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/2.4.6/elasticsearch-2.4.6.tar.gz
-    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.6.tar.gz
+#env:
+#  matrix:
+#    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/2.4.6/elasticsearch-2.4.6.tar.gz
+#    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.6.tar.gz
 
 before_install:
-  - mkdir /tmp/elasticsearch
-  - wget -O - ${ELASTIC_LINK} | tar xz --directory=/tmp/elasticsearch --strip-components=1
-  - /tmp/elasticsearch/bin/elasticsearch --daemonize --path.data /tmp
+  - curl -O https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/2.3.0/elasticsearch-2.3.0.deb && sudo dpkg -i --force-confnew elasticsearch-2.3.0.deb && sudo service elasticsearch restart
 
 before_script:
    - sleep 10
