@@ -747,11 +747,12 @@ class Elastic(DataLayer):
     def insert(self, resource, doc_or_docs, **kwargs):
         """Insert document, it must be new if there is ``_id`` in it."""
         ids = []
-        kwargs.update(self._es_args(resource))
+        es_args = self._es_args(resource)
+        es_args.update(kwargs)
         for doc in doc_or_docs:
             _id = doc.pop("_id", None)
-            body = self._prepare_for_storage(resource, doc, kwargs)
-            res = self.elastic(resource).index(body=body, id=_id, **kwargs)
+            body = self._prepare_for_storage(resource, doc, es_args)
+            res = self.elastic(resource).index(body=body, id=_id, **es_args)
             doc.setdefault("_id", res.get("_id", _id))
             ids.append(doc.get("_id"))
         self._refresh_resource_index(resource)
