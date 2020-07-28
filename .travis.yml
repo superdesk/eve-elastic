@@ -5,26 +5,23 @@ dist: bionic
 cache: pip
 
 services:
-    - elasticsearch
+  - elasticsearch
 
 env:
-    matrix:
-        - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/2.4.6/elasticsearch-2.4.6.tar.gz
-#        - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/2.4.6/elasticsearch-2.4.6.deb
-#        - ELASTIC_LINK=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.6.deb
+  matrix:
+    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/2.4.6/elasticsearch-2.4.6.tar.gz
+    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.6.tar.gz
 
 before_install:
-#    - curl ${ELASTIC_LINK} -o elasticsearch.deb && sudo dpkg -i --force-confnew elasticsearch.deb && sudo service elasticsearch restart
-    - mkdir /tmp/elasticsearch
-    - wget -O - ${ELASTIC_LINK} | tar xz --directory=/tmp/elasticsearch --strip-components=1
-    - /tmp/elasticsearch/bin/elasticsearch --daemonize --path.data /tmp
-    - sleep 10
-    - curl http://localhost:9200/_cluster/health
+  - mkdir /tmp/elasticsearch
+  - wget -O - ${ELASTIC_LINK} | tar xz --directory=/tmp/elasticsearch --strip-components=1
+  - /tmp/elasticsearch/bin/elasticsearch --daemonize --path.data /tmp
 
 before_script:
    - sleep 10
+   - curl http://localhost:9200/
    - curl http://localhost:9200/_cluster/health
 
 script:
-    - nosetests
-    - flake8
+  - nosetests
+  - flake8
