@@ -1,23 +1,22 @@
 language: python
 
+dist: bionic
+
 cache: pip
 
+services:
+    - docker
+
 env:
-  matrix:
-    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/2.4.6/elasticsearch-2.4.6.deb
-    - ELASTIC_LINK=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.6.deb
+    matrix:
+        - ELASTIC_VERSION=2.4.6
+        - ELASTIC_VERSION=1.7.6
 
 before_install:
-  - curl -f ${ELASTIC_LINK} -o elasticsearch.deb
-  - sudo dpkg -i --force-confnew elasticsearch.deb
-  - sudo chown -R elasticsearch:elasticsearch /etc/default/elasticsearch
-  - sudo systemctl start elasticsearch
-
-before_script:
-   - sleep 10
-   - curl http://localhost:9200/
-   - curl http://localhost:9200/_cluster/health
+    - docker pull "elasticsearch:${ELASTIC_VERSION}"
+    - docker run -d -p 9200:9200 -e "discovery.type=single-node" --tmpfs "/usr/share/elasticsearch/data" "elasticsearch:${ELASTIC_VERSION}"
+    - scripts/wait-for-elastic.sh
 
 script:
-  - nosetests
-  - flake8
+    - nosetests
+    - flake8
