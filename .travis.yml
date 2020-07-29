@@ -15,6 +15,7 @@ env:
 before_install:
     - docker pull "elasticsearch:${ELASTIC_VERSION}"
     - docker run -d -p 9200:9200 -e "discovery.type=single-node" --tmpfs "/usr/share/elasticsearch/data" "elasticsearch:${ELASTIC_VERSION}"
+    - scripts/wait-for-elastic.sh
 
 script:
     - nosetests
