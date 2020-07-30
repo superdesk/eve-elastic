@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+2.6.0 (2020-07-30)
+++++++++++++++++++
+
+- make it possible to override `doc_type` on insert (by Luis Fernando Gomes)
+
 2.5.0 (2019-01-03)
 ++++++++++++++++++
 
