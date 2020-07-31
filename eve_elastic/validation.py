@@ -1,5 +1,5 @@
-from cerberus import Validator
+from cerberus import Validator as _Validator
 
 
-class Validator(Validator):
+class Validator(_Validator):
     pass

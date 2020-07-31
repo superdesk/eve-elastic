@@ -356,6 +356,8 @@ class Elastic(DataLayer):
         app.config.setdefault("ELASTICSEARCH_INDEXES", {})
         app.config.setdefault("ELASTICSEARCH_FORCE_REFRESH", True)
         app.config.setdefault("ELASTICSEARCH_AUTO_AGGREGATIONS", True)
+        # https://www.elastic.co/guide/en/elasticsearch/reference/master/search-request-body.html#request-body-search-track-total-hits # NOQA
+        app.config.setdefault("ELASTICSEARCH_TRACK_TOTAL_HITS", 10000)
 
         self.app = app
         self.index = app.config["ELASTICSEARCH_INDEX"]
@@ -374,10 +376,10 @@ class Elastic(DataLayer):
                 if app.config.get("DEBUG"):
                     raise
                 else:
-                    raise
                     logger.error(
                         "mapping error, updating settings resource=%s", resource
                     )
+                    raise
 
     def _init_index(self, es, index, settings=None, mapping=None):
         if not es.indices.exists(index):
@@ -983,8 +985,16 @@ class Elastic(DataLayer):
 
         They must use all same elastic instance and should be same schema.
         """
-        if params is None:
-            params = {}
+
+        default_params = {
+            'track_total_hits': self.app.config['ELASTICSEARCH_TRACK_TOTAL_HITS']
+        }
+
+        if params is not None:
+            default_params.update(params)
+
+        params = default_params
+
         if isinstance(resources, str):
             resources = resources.split(",")
         index = [self._resource_index(resource) for resource in resources]
