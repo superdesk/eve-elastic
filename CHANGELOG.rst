@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+7.1.0 (2020-08-03)
+++++++++++++++++++
+
+- add config to control total hits `ELASTICSEARCH_TRACK_TOTAL_HITS`
+- make it possible to override `doc_type` on insert (by Luis Fernando Gomes)
+
 7.0.8 (2020-07-28)
 ++++++++++++++++++
 
