@@ -987,7 +987,7 @@ class Elastic(DataLayer):
         """
 
         default_params = {
-            'track_total_hits': self.app.config['ELASTICSEARCH_TRACK_TOTAL_HITS']
+            "track_total_hits": self.app.config["ELASTICSEARCH_TRACK_TOTAL_HITS"]
         }
 
         if params is not None:
