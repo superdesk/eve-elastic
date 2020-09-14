@@ -842,8 +842,8 @@ class TestElastic(TestCase):
                 {
                     "query": {
                         "filtered": {
-                            "filter": {"term": {"uri": "foo"},},
-                            "query": {"query_string": {"query": "foo",},},
+                            "filter": {"term": {"uri": "foo"}},
+                            "query": {"query_string": {"query": "foo"}},
                         }
                     }
                 },
@@ -1437,7 +1437,7 @@ class TestElasticNested(TestCase):
                     "type": "object",
                     "mapping": {
                         "type": "nested",
-                        "properties": {"due": {"type": "date"},},
+                        "properties": {"due": {"type": "date"}},
                     },
                 },
             },
