@@ -1,6 +1,7 @@
 *.py[co]
 
 # env
+.python-version
 /env
 /venv
 /bin
