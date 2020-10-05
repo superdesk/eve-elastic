@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+7.1.2 (2020-10-05)
+++++++++++++++++++
+
+- use default search params in find method.
+
 7.1.1 (2020-09-18)
 ++++++++++++++++++
 
