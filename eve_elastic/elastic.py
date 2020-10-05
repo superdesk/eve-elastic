@@ -526,6 +526,10 @@ class Elastic(DataLayer):
         except elasticsearch.exceptions.NotFoundError:
             return alias
 
+    def _get_default_search_params(self):
+        """Return default search arguments"""
+        return {"track_total_hits": self.app.config["ELASTICSEARCH_TRACK_TOTAL_HITS"]}
+
     def find(self, resource, req, sub_resource_lookup, **kwargs):
         """Find documents for resource."""
         args = getattr(req, "args", request.args if request else {}) or {}
@@ -609,6 +613,11 @@ class Elastic(DataLayer):
             source_projections = self.get_projected_fields(req)
 
         args = self._es_args(resource, source_projections=source_projections)
+        default_params = self._get_default_search_params()
+        if args is not None:
+            default_params.update(args)
+        args = default_params
+
         try:
             hits = self.elastic(resource).search(body=fix_query(query), **args)
         except elasticsearch.exceptions.RequestError as e:
@@ -986,9 +995,7 @@ class Elastic(DataLayer):
         They must use all same elastic instance and should be same schema.
         """
 
-        default_params = {
-            "track_total_hits": self.app.config["ELASTICSEARCH_TRACK_TOTAL_HITS"]
-        }
+        default_params = self._get_default_search_params()
 
         if params is not None:
             default_params.update(params)
