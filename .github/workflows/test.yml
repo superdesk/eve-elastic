@@ -1,0 +1,30 @@
+name: "Test"
+
+on: [push, pull_request]
+
+jobs:
+  nose:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        elastic-version: [7.12.0, 7.11.2, 7.10.2]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.6"
+
+    - name: install
+      run: |
+          docker pull "docker.elastic.co/elasticsearch/elasticsearch:${{ matrix.elastic-version }}"
+          docker run -d -p 9200:9200 -e "discovery.type=single-node" --tmpfs "/usr/share/elasticsearch/data" "docker.elastic.co/elasticsearch/elasticsearch:${{ matrix.elastic-version }}"
+          pip install -r requirements.txt
+          pip install .
+          ./scripts/wait-for-elastic.sh
+
+    - name: test
+      run: nosetests
