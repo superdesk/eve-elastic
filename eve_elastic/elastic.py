@@ -608,11 +608,8 @@ class Elastic(DataLayer):
                         query["highlight"] = highlights
                         query["highlight"].setdefault("require_field_match", False)
 
-        source_projections = None
-        if self.should_project(req):
-            source_projections = self.get_projected_fields(req)
-
-        args = self._es_args(resource, source_projections=source_projections)
+        source_projection = self.get_projected_fields(req, resource)
+        args = self._es_args(resource, source_projections=source_projection)
         default_params = self._get_default_search_params()
         if args is not None:
             default_params.update(args)
@@ -664,7 +661,7 @@ class Elastic(DataLayer):
         except (AttributeError, TypeError):
             return False
 
-    def get_projected_fields(self, req):
+    def get_projected_fields(self, req, resource=None):
         """
         Returns the projected fields from request.
 
@@ -673,7 +670,15 @@ class Elastic(DataLayer):
             args = getattr(req, "args", {})
             return ",".join(json.loads(args.get("projections")) + [RESOURCE_FIELD])
         except (AttributeError, TypeError):
-            return None
+            pass
+        if (
+            resource and req.projection
+        ):  # eve default behaviour, only allow for now when projection is set via req
+            client_projection = self._client_projection(req)
+            projection = self._datasource_ex(
+                resource, client_projection=client_projection
+            )[2]
+            return ",".join([key for key, val in projection.items() if val])
 
     def find_one(self, resource, req, **lookup):
         """Find single document, if there is _id in lookup use that, otherwise filter."""
