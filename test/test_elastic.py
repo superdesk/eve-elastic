@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from arrow.api import utcnow
 import eve
 import time
 import elasticsearch
