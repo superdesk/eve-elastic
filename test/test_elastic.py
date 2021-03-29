@@ -428,6 +428,38 @@ class TestElastic(TestCase):
                 fields, "priority,urgency,word_count,slugline,highlights,_resource"
             )
 
+    def test_eve_projection(self):
+        with self.app.app_context():
+            self.app.data.insert(
+                "items",
+                [
+                    {
+                        "uri": "test",
+                        "name": "foo",
+                        "firstcreated": "2020-12-12T10:10:10+0000",
+                        "_etag": "foo",
+                        "_created": "2020-12-12T10:10:10+0000",
+                        "_updated": "2020-12-12T10:10:10+0000",
+                    }
+                ],
+            )
+
+            req = ParsedRequest()
+            req.projection = json.dumps(
+                {
+                    "name": 1,
+                }
+            )
+
+            items = self.app.data.find("items", req, None)
+            fields = items[0].keys()
+            self.assertIn("name", fields)
+            self.assertIn("_id", fields)
+            self.assertIn("_etag", fields)
+            self.assertIn("_created", fields)
+            self.assertIn("_updated", fields)
+            self.assertNotIn("firstcreated", fields)
+
     def test_should_highlight(self):
         with self.app.app_context():
             req = ParsedRequest()
