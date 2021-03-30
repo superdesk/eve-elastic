@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+7.1.3 (2021-03-30)
+++++++++++++++++++
+
+- use eve `req.projection` for source filtering.
+
 7.1.2 (2020-10-05)
 ++++++++++++++++++
 
