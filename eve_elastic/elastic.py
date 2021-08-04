@@ -978,7 +978,7 @@ class Elastic(DataLayer):
         return self.elastics[px]
 
     def _get_retry_on_conflict(self):
-        """ Get the retry on settings"""
+        """Get the retry on settings"""
         return app.config.get("ELASTICSEARCH_RETRY_ON_CONFLICT", 5)
 
     def drop_index(self):
