@@ -17,7 +17,7 @@ logger = logging.getLogger("elasticsearch.helpers")
 class BulkIndexError(ElasticsearchException):
     @property
     def errors(self):
-        """ List of errors from execution of the last chunk. """
+        """List of errors from execution of the last chunk."""
         return self.args[1]
 
 
