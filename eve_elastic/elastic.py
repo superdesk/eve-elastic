@@ -85,7 +85,7 @@ def test_settings_contain(current_settings, new_settings):
         return False
 
 
-def noop():
+def noop(*args):
     pass
 
 
@@ -571,7 +571,7 @@ class Elastic(DataLayer):
 
         filters = []
         filters.append(source_config.get("elastic_filter"))
-        filters.append(source_config.get("elastic_filter_callback", noop)())
+        filters.append(source_config.get("elastic_filter_callback", noop)(req))
         filters.append(
             {"bool": {"must": _build_lookup_filter(sub_resource_lookup)}}
             if sub_resource_lookup
