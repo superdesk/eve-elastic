@@ -95,7 +95,9 @@ DOMAIN = {
         "schema": {"uri": {"type": "string", "unique": True}},
         "datasource": {
             "backend": "elastic",
-            "elastic_filter_callback": lambda: {"term": {"uri": "foo"}},
+            "elastic_filter_callback": lambda req: {
+                "term": {"uri": req.args.get("uri")}
+            },
         },
     },
     "items_foo": {
@@ -730,7 +732,7 @@ class TestElastic(TestCase):
                 "items_with_callback_filter", [{"uri": "foo"}, {"uri": "bar"}]
             )
 
-        with self.app.test_request_context():
+        with self.app.test_request_context("test?uri=foo"):
             req = parse_request("items_with_callback_filter")
             cursor = self.app.data.find("items_with_callback_filter", req, None)
             self.assertEqual(1, cursor.count())
