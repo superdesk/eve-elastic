@@ -95,7 +95,9 @@ DOMAIN = {
         "schema": {"uri": {"type": "string", "unique": True}},
         "datasource": {
             "backend": "elastic",
-            "elastic_filter_callback": lambda req: {"term": {"uri": req.args.get("uri")}},
+            "elastic_filter_callback": lambda req: {
+                "term": {"uri": req.args.get("uri")}
+            },
         },
     },
     "items_foo": {
