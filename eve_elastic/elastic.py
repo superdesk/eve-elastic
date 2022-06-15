@@ -571,7 +571,11 @@ class Elastic(DataLayer):
 
         filters = []
         filters.append(source_config.get("elastic_filter"))
-        filters.append(source_config.get("elastic_filter_callback", noop)(req))
+        if source_config.get("elastic_filter_callback"):
+            try:
+                filters.append(source_config["elastic_filter_callback"](req))
+            except TypeError:
+                filters.append(source_config["elastic_filter_callback"]())
         filters.append(
             {"bool": {"must": _build_lookup_filter(sub_resource_lookup)}}
             if sub_resource_lookup
