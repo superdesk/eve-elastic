@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+7.2.1 (2022-06-15)
+++++++++++++++++++
+
+- call filter_callback without req param on TypeError
+
 7.2.0 (2022-06-15)
 ++++++++++++++++++
 
