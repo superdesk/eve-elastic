@@ -634,7 +634,8 @@ class Elastic(DataLayer):
             else:
                 raise
 
-        return self._parse_hits(hits, resource)
+        cursor = self._parse_hits(hits, resource)
+        return cursor, cursor.count()
 
     def should_aggregate(self, req):
         """Check the environment variable and the given argument parameter to decide if aggregations needed.

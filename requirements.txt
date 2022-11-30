@@ -1,5 +1,5 @@
 nose
 mock
 werkzeug>=1.0,<1.1
-eve==1.1.2
+eve>1.1,<1.2
 MarkupSafe>2.0,<2.1
