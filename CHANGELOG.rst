@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+7.3.0 (2022-11-30)
+++++++++++++++++++
+
+- change find return to be cursor, count
+- fix overriding query inside match query
+
 7.2.1 (2022-06-15)
 ++++++++++++++++++
 
