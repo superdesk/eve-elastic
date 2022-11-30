@@ -261,16 +261,14 @@ class TestElastic(TestCase):
         with self.app.app_context():
             req = ParsedRequest()
             req.args = {"filter": json.dumps(query_filter)}
-            self.assertEqual(
-                1, self.app.data.find("items_with_description", req, None).count()
-            )
+            cursor, count = self.app.data.find("items_with_description", req, None)
+            self.assertEqual(1, count)
 
         with self.app.app_context():
             req = ParsedRequest()
             req.args = {"q": "bar", "filter": json.dumps(query_filter)}
-            self.assertEqual(
-                0, self.app.data.find("items_with_description", req, None).count()
-            )
+            cursor, count = self.app.data.find("items_with_description", req, None)
+            self.assertEqual(0, count)
 
     def test_find_one_by_id(self):
         """elastic 1.0+ is using 'found' property instead of 'exists'"""
@@ -304,7 +302,7 @@ class TestElastic(TestCase):
             self.app.data.insert("items", [{"uri": "bar", "name": "bar"}])
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
-            res = self.app.data.find("items", req, None)
+            res, count = self.app.data.find("items", req, None)
             self.assertEqual(1, res.count())
 
     def test_search_via_source_param_and_schema_filter(self):
@@ -319,7 +317,7 @@ class TestElastic(TestCase):
             )
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
-            res = self.app.data.find("items_with_description", req, None)
+            res, count = self.app.data.find("items_with_description", req, None)
             self.assertEqual(1, res.count())
 
     def test_search_via_source_param_and_with_highlight(self):
@@ -334,7 +332,7 @@ class TestElastic(TestCase):
             )
             req = ParsedRequest()
             req.args = {"source": json.dumps(query), "es_highlight": 1}
-            res = self.app.data.find("items_with_description", req, None)
+            res, count = self.app.data.find("items_with_description", req, None)
             self.assertEqual(1, res.count())
             es_highlight = res[0].get("es_highlight")
             self.assertIsNotNone(es_highlight)
@@ -353,7 +351,7 @@ class TestElastic(TestCase):
                 "source": json.dumps({"query": {"term": {"name": "foo"}}}),
                 "es_highlight": 1,
             }
-            res = self.app.data.find("items_with_description", req, None)
+            res, count = self.app.data.find("items_with_description", req, None)
             self.assertEqual(0, res.count())
 
     def test_search_via_source_param_and_without_highlight(self):
@@ -368,7 +366,7 @@ class TestElastic(TestCase):
             )
             req = ParsedRequest()
             req.args = {"source": json.dumps(query), "es_highlight": 0}
-            res = self.app.data.find("items_with_description", req, None)
+            res, count = self.app.data.find("items_with_description", req, None)
             self.assertEqual(1, res.count())
             es_highlight = res[0].get("es_highlight")
             self.assertIsNone(es_highlight)
@@ -388,7 +386,7 @@ class TestElastic(TestCase):
                 "source": json.dumps(query),
                 "projections": json.dumps(["name"]),
             }
-            res = self.app.data.find("items_with_description", req, None)
+            res, count = self.app.data.find("items_with_description", req, None)
             self.assertEqual(1, res.count())
             self.assertTrue("description" not in res.docs[0])
             self.assertTrue("name" in res.docs[0])
@@ -453,7 +451,7 @@ class TestElastic(TestCase):
                 }
             )
 
-            items = self.app.data.find("items", req, None)
+            items, count = self.app.data.find("items", req, None)
             fields = items[0].keys()
             self.assertIn("name", fields)
             self.assertIn("_id", fields)
@@ -501,16 +499,14 @@ class TestElastic(TestCase):
             self.app.data.insert("items", [{"uri": "foo", "name": "foo"}])
             req = ParsedRequest()
             req.args = {}
-            self.assertEqual(
-                1, self.app.data.find("items", req, {"name": "foo"}).count()
+            cursor, count = self.app.data.find("items", req, {"name": "foo"})
+            self.assertEqual(1, count)
+            cursor, count = self.app.data.find("items", req, {"name": "bar"})
+            self.assertEqual(0, count)
+            cursor, count = self.app.data.find(
+                "items", req, {"name": "foo", "uri": "foo"}
             )
-            self.assertEqual(
-                0, self.app.data.find("items", req, {"name": "bar"}).count()
-            )
-            self.assertEqual(
-                1,
-                self.app.data.find("items", req, {"name": "foo", "uri": "foo"}).count(),
-            )
+            self.assertEqual(1, count)
 
     def test_sub_resource_lookup_with_schema_filter(self):
         with self.app.app_context():
@@ -520,18 +516,14 @@ class TestElastic(TestCase):
             )
             req = ParsedRequest()
             req.args = {}
-            self.assertEqual(
-                1,
-                self.app.data.find(
-                    "items_with_description", req, {"name": "foo"}
-                ).count(),
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {"name": "foo"}
             )
-            self.assertEqual(
-                0,
-                self.app.data.find(
-                    "items_with_description", req, {"name": "bar"}
-                ).count(),
+            self.assertEqual(1, count)
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {"name": "bar"}
             )
+            self.assertEqual(0, count)
 
     def test_resource_filter(self):
         with self.app.app_context():
@@ -544,9 +536,8 @@ class TestElastic(TestCase):
             req.args["source"] = json.dumps(
                 {"query": {"bool": {"must": [{"term": {"uri": "bar"}}]}}}
             )
-            self.assertEqual(
-                0, self.app.data.find("items_with_description", req, None).count()
-            )
+            cursor, count = self.app.data.find("items_with_description", req, None)
+            self.assertEqual(0, count)
 
     def test_where_filter(self):
         with self.app.app_context():
@@ -579,7 +570,8 @@ class TestElastic(TestCase):
             self.app.data.remove("items", {"_id": self.ids[0]})
             req = ParsedRequest()
             req.args = {}
-            self.assertEqual(1, self.app.data.find("items", req, None).count())
+            cursor, count = self.app.data.find("items", req, None)
+            self.assertEqual(1, count)
 
     def test_remove_non_existing_item(self):
         with self.app.app_context():
@@ -613,8 +605,12 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {}
             response = {}
-            item1 = self.app.data.find("items_with_description", req, {"name": "foo"})
-            item2 = self.app.data.find("items_with_description", req, {"name": "bar"})
+            item1, count1 = self.app.data.find(
+                "items_with_description", req, {"name": "foo"}
+            )
+            item2, count2 = self.app.data.find(
+                "items_with_description", req, {"name": "bar"}
+            )
             item1.extra(response)
             self.assertEqual(3, item1.count())
             self.assertEqual(1, item2.count())
@@ -629,12 +625,12 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {}
             response = {}
-            cursor = self.app.data.find("items_with_description", req, {})
+            cursor, count = self.app.data.find("items_with_description", req, {})
             cursor.extra(response)
             self.assertNotIn("_aggregations", response)
 
             req.args = {"aggregations": 1}
-            cursor = self.app.data.find("items_with_description", req, {})
+            cursor, count = self.app.data.find("items_with_description", req, {})
             cursor.extra(response)
             self.assertIn("_aggregations", response)
 
@@ -653,7 +649,8 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {}
             req.args["filter"] = json.dumps({"term": {"uri": "foo"}})
-            self.assertEqual(1, self.app.data.find("items", req, None).count())
+            cursor, count = self.app.data.find("items", req, None)
+            self.assertEqual(1, count)
 
     def test_filters_with_aggregations(self):
         with self.app.app_context():
@@ -667,7 +664,9 @@ class TestElastic(TestCase):
 
             req = ParsedRequest()
             res = {}
-            cursor = self.app.data.find("items_with_description", req, {"uri": "bar"})
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {"uri": "bar"}
+            )
             cursor.extra(res)
             self.assertEqual(1, cursor.count())
             self.assertIn(
@@ -679,10 +678,10 @@ class TestElastic(TestCase):
         with self.app.app_context():
             self.app.data.insert("items", [{"uri": "foo"}, {"uri": "bar"}])
             req = ParsedRequest()
-            self.assertEqual(2, self.app.data.find("items", req, None).count())
-            self.assertEqual(
-                1, self.app.data.find("items", req, {"uri": "foo"}).count()
-            )
+            cursor, count = self.app.data.find("items", req, None)
+            self.assertEqual(2, count)
+            cursor, count = self.app.data.find("items", req, {"uri": "foo"})
+            self.assertEqual(1, count)
 
     def test_filters_with_filtered_query(self):
         with self.app.app_context():
@@ -700,7 +699,7 @@ class TestElastic(TestCase):
 
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEqual(0, cursor.count())
 
     def test_basic_search_query(self):
@@ -709,7 +708,7 @@ class TestElastic(TestCase):
 
         with self.app.test_request_context("/items/?q=foo"):
             req = parse_request("items")
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEquals(1, cursor.count())
 
     def test_phrase_search_query(self):
@@ -718,12 +717,12 @@ class TestElastic(TestCase):
 
         with self.app.test_request_context('/items/?q="foo bar"'):
             req = parse_request("items")
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEquals(1, cursor.count())
 
         with self.app.test_request_context('/items/?q="bar foo"'):
             req = parse_request("items")
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEquals(0, cursor.count())
 
     def test_elastic_filter_callback(self):
@@ -734,7 +733,7 @@ class TestElastic(TestCase):
 
         with self.app.test_request_context("test?uri=foo"):
             req = parse_request("items_with_callback_filter")
-            cursor = self.app.data.find("items_with_callback_filter", req, None)
+            cursor, count = self.app.data.find("items_with_callback_filter", req, None)
             self.assertEqual(1, cursor.count())
 
     def test_elastic_sort_by_score_if_there_is_query(self):
@@ -747,7 +746,7 @@ class TestElastic(TestCase):
         with self.app.test_request_context("/items/"):
             req = parse_request("items")
             req.args = {"q": "foo"}
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEqual(2, cursor.count())
             self.assertEqual("foo", cursor[0]["uri"])
 
@@ -755,7 +754,7 @@ class TestElastic(TestCase):
         with self.app.test_request_context("/items/"):
             req = parse_request("items")
             req.args = {}
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEqual(0, cursor.count())
 
     @skip("every resource has it's own index now")
@@ -802,7 +801,7 @@ class TestElastic(TestCase):
 
             time.sleep(2)
             req = ParsedRequest()
-            cursor = self.app.data.find("items", req, None)
+            cursor, count = self.app.data.find("items", req, None)
             self.assertEqual(2, cursor.count())
 
     def test_elastic_prefix(self):
@@ -811,11 +810,11 @@ class TestElastic(TestCase):
             self.assertIn("firstcreated", mapping)
 
             self.app.data.insert("items_foo_default_index", [{"uri": "test"}])
-            foo_items = self.app.data.find("items_foo", ParsedRequest(), None)
+            foo_items, count = self.app.data.find("items_foo", ParsedRequest(), None)
             self.assertEqual(0, foo_items.count())
 
             self.app.data.insert("items_foo", [{"uri": "foo"}, {"uri": "bar"}])
-            foo_items = self.app.data.find("items_foo", ParsedRequest(), None)
+            foo_items, count = self.app.data.find("items_foo", ParsedRequest(), None)
             self.assertEqual(2, foo_items.count())
 
     def test_retry_on_conflict(self):
@@ -1325,7 +1324,7 @@ class TestElasticSearchParentChild(TestCase):
             }
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
-            results = self.app.data.find(self.parent_item, req, None)
+            results, count = self.app.data.find(self.parent_item, req, None)
             self.assertEqual(1, results.count())
             self.assertEqual(results[0].get("_id"), "foo")
             self.assertEqual(results[0].get("_type"), self.parent_item)
@@ -1428,7 +1427,7 @@ class TestElasticInnerHits(TestCase):
             }
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
-            results = self.app.data.find("items", req, None)
+            results, count = self.app.data.find("items", req, None)
             self.assertEqual(2, results.count())
             self.assertEqual(results[0].get("_id"), "foo")
             self.assertEqual(len(results[0].get("_inner_hits")), 1)
@@ -1541,7 +1540,7 @@ class TestElasticNested(TestCase):
             }
             req = ParsedRequest()
             req.args = {"source": json.dumps(query)}
-            results = self.app.data.find("items", req, None)
+            results, count = self.app.data.find("items", req, None)
             self.assertEqual(2, results.count())
             self.assertEqual(results[0].get("_id"), "bar")
             self.assertEqual(results[1].get("_id"), "foo")
