@@ -216,7 +216,7 @@ def fix_query(query, top=True, context=None):
         elif key == "query_string":
             new_query[key] = val
             val.setdefault("lenient", True)
-        elif key == "query" and not top and context != "aggs":
+        elif key == "query" and not top and context != "aggs" and not isinstance(val, str):
             new_query["bool"] = {"must": fix_query(val, top=False, context=context)}
         elif top:
             new_query[key] = fix_query(val, top=False, context=key)
