@@ -503,7 +503,9 @@ class TestElastic(TestCase):
             self.assertEqual(1, count)
             cursor, count = self.app.data.find("items", req, {"name": "bar"})
             self.assertEqual(0, count)
-            cursor, count = self.app.data.find("items", req, {"name": "foo", "uri": "foo"})
+            cursor, count = self.app.data.find(
+                "items", req, {"name": "foo", "uri": "foo"}
+            )
             self.assertEqual(1, count)
 
     def test_sub_resource_lookup_with_schema_filter(self):
@@ -514,9 +516,13 @@ class TestElastic(TestCase):
             )
             req = ParsedRequest()
             req.args = {}
-            cursor, count = self.app.data.find("items_with_description", req, {"name": "foo"})
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {"name": "foo"}
+            )
             self.assertEqual(1, count)
-            cursor, count = self.app.data.find("items_with_description", req, {"name": "bar"})
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {"name": "bar"}
+            )
             self.assertEqual(0, count)
 
     def test_resource_filter(self):
@@ -599,8 +605,12 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {}
             response = {}
-            item1, count1 = self.app.data.find("items_with_description", req, {"name": "foo"})
-            item2, count2 = self.app.data.find("items_with_description", req, {"name": "bar"})
+            item1, count1 = self.app.data.find(
+                "items_with_description", req, {"name": "foo"}
+            )
+            item2, count2 = self.app.data.find(
+                "items_with_description", req, {"name": "bar"}
+            )
             item1.extra(response)
             self.assertEqual(3, item1.count())
             self.assertEqual(1, item2.count())
@@ -654,7 +664,9 @@ class TestElastic(TestCase):
 
             req = ParsedRequest()
             res = {}
-            cursor, count = self.app.data.find("items_with_description", req, {"uri": "bar"})
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {"uri": "bar"}
+            )
             cursor.extra(res)
             self.assertEqual(1, cursor.count())
             self.assertIn(
