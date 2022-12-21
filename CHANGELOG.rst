@@ -3,6 +3,12 @@
 Changelog
 ---------
 
+7.3.1 (2022-12-21)
+++++++++++++++++++
+
+- add config `ELASTICSEARCH_FIX_QUERY` to control if we want to handle old queries
+- add config `ELASTICSEARCH_FIX_MAPPING` to control if we want to handle old mapping
+
 7.3.0 (2022-11-30)
 ++++++++++++++++++
 

@@ -103,6 +103,9 @@ def generate_index_name(alias):
 
 
 def fix_mapping(mapping, top=True):
+    if app.config.get("ELASTICSEARCH_FIX_MAPPING") is False:
+        return mapping
+
     if isinstance(mapping, list):
         return [fix_mapping(_mapping, top=False) for _mapping in mapping]
     elif not isinstance(mapping, dict):
@@ -136,6 +139,9 @@ def merge_queries(dest, key, value):
 
 
 def fix_query(query, top=True, context=None):
+    if app.config.get("ELASTICSEARCH_FIX_QUERY") is False:
+        return query
+
     if isinstance(query, list):
         return [fix_query(_query, top=False, context=context) for _query in query]
     elif not isinstance(query, dict):
@@ -363,6 +369,8 @@ class Elastic(DataLayer):
         app.config.setdefault("ELASTICSEARCH_AUTO_AGGREGATIONS", True)
         # https://www.elastic.co/guide/en/elasticsearch/reference/master/search-request-body.html#request-body-search-track-total-hits # NOQA
         app.config.setdefault("ELASTICSEARCH_TRACK_TOTAL_HITS", 10000)
+        app.config.setdefault("ELASTICSEARCH_FIX_QUERY", True)
+        app.config.setdefault("ELASTICSEARCH_FIX_MAPPING", True)
 
         self.app = app
         self.index = app.config["ELASTICSEARCH_INDEX"]
