@@ -327,7 +327,7 @@ def set_filters(query, filters):
 
 def set_sort(query, sort):
     query["sort"] = []
-    for (key, sortdir) in sort:
+    for key, sortdir in sort:
         sort_dict = dict([(key, "asc" if sortdir > 0 else "desc")])
         query["sort"].append(sort_dict)
 
@@ -376,23 +376,23 @@ class Elastic(DataLayer):
         self.index = app.config["ELASTICSEARCH_INDEX"]
         self.es = get_es(app.config["ELASTICSEARCH_URL"], **self.kwargs)
 
-    def init_index(self):
+    def init_index(self, resource=None, raise_on_mapping_error=False):
         """Create indexes and put mapping."""
-        for resource in self._get_elastic_resources():
-            es = self.elastic(resource)
-            index = self._resource_index(resource)
-            settings = self._resource_config(resource, "SETTINGS")
-            mappings = self._resource_mapping(resource)
+        for _resource in self._get_elastic_resources():
+            if resource and _resource != resource:
+                continue
+            es = self.elastic(_resource)
+            index = self._resource_index(_resource)
+            settings = self._resource_config(_resource, "SETTINGS")
+            mappings = self._resource_mapping(_resource)
             try:
                 self._init_index(es, index, settings, mappings)
             except elasticsearch.exceptions.RequestError:
-                if app.config.get("DEBUG"):
+                if app.config.get("DEBUG") or raise_on_mapping_error:
                     raise
-                else:
-                    logger.error(
-                        "mapping error, updating settings resource=%s", resource
-                    )
-                    raise
+                logger.warning(
+                    "mapping error, updating settings resource=%s", _resource
+                )
 
     def _init_index(self, es, index, settings=None, mapping=None):
         if not es.indices.exists(index):
@@ -523,8 +523,13 @@ class Elastic(DataLayer):
 
     def get_index(self, resource):
         alias = self._resource_index(resource)
-        info = self.elastic(resource).indices.get_alias(name=alias)
-        return next(iter(info.keys()))
+        try:
+            info = self.elastic(resource).indices.get_alias(name=alias)
+            return next(iter(info.keys()))
+        except elasticsearch.exceptions.NotFoundError:
+            if self.elastic(resource).indices.exists(alias):
+                return alias
+            raise
 
     def get_index_by_alias(self, alias):
         """Get index name for given alias.
@@ -1041,7 +1046,11 @@ class Elastic(DataLayer):
         alias = self._resource_index(resource)
         settings = self._resource_config(resource, "SETTINGS")
         mapping = self._resource_mapping(resource)
-        old_index = self.get_index(resource)
+        new_index = False
+        try:
+            old_index = self.get_index(resource)
+        except elasticsearch.exceptions.NotFoundError:
+            new_index = True
 
         # create new index
         index = generate_index_name(alias)
@@ -1049,17 +1058,22 @@ class Elastic(DataLayer):
         self._create_index(es, index, settings)
         self._put_mapping(es, index, mapping)
 
-        # reindex data
-        print("reindex", alias, index)
-        reindex(es, alias, index)
+        if not new_index:
+            # reindex data
+            print("reindex", alias, index)
+            reindex(es, alias, index)
 
-        # remove old alias
-        print("remove alias", alias, old_index)
-        es.indices.delete_alias(index=old_index, name=alias)
+            # remove old alias
+            print("remove alias", alias, old_index)
+            try:
+                es.indices.delete_alias(index=old_index, name=alias)
+            except elasticsearch.exceptions.NotFoundError:
+                # this was not an alias, but an index. will be removed in next step
+                pass
 
-        # remove old index
-        print("remove index", old_index)
-        es.indices.delete(old_index)
+            # remove old index
+            print("remove index", old_index)
+            es.indices.delete(old_index)
 
         # create alias for new index
         print("put", alias, index)

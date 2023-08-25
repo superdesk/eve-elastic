@@ -884,6 +884,39 @@ class TestElastic(TestCase):
             )
             self.assertEqual(1, docs.count())
 
+    def test_reindex_old_index_without_alias(self):
+        resource = "items"
+        with self.app.app_context():
+            elastic = self.app.data
+            es = elastic.elastic(resource)
+            alias = elastic._resource_index(resource)
+            index = elastic.get_index(resource)
+
+            # drop index and alias, create index using alias name
+            es.indices.delete_alias(index, alias)
+            es.indices.delete(index)
+            es.indices.create(alias)
+
+            elastic.reindex(resource)
+
+            assert es.indices.exists_alias(alias)
+
+    def test_reindex_without_old_index(self):
+        resource = "items"
+        with self.app.app_context():
+            elastic = self.app.data
+            es = elastic.elastic(resource)
+            alias = elastic._resource_index(resource)
+            index = elastic.get_index(resource)
+
+            # drop index and alias, create index using alias name
+            es.indices.delete_alias(index, alias)
+            es.indices.delete(index)
+
+            elastic.reindex(resource)
+
+            assert es.indices.exists_alias(alias)
+
 
 class TestElasticSearchWithSettings(TestCase):
     resource = "items"
@@ -923,13 +956,11 @@ class TestElasticSearchWithSettings(TestCase):
             analyzer = settings["settings"]["index"]["analysis"]["analyzer"]
             self.assertDictEqual(
                 {
-                    "phrase_prefix_analyzer": {
-                        "tokenizer": "keyword",
-                        "filter": ["lowercase"],
-                        "type": "custom",
-                    }
+                    "tokenizer": "keyword",
+                    "filter": ["lowercase"],
+                    "type": "custom",
                 },
-                analyzer,
+                analyzer["phrase_prefix_analyzer"],
             )
 
     def test_put_settings(self):
@@ -938,13 +969,11 @@ class TestElasticSearchWithSettings(TestCase):
             analyzer = settings["settings"]["index"]["analysis"]["analyzer"]
             self.assertDictEqual(
                 {
-                    "phrase_prefix_analyzer": {
-                        "tokenizer": "keyword",
-                        "filter": ["lowercase"],
-                        "type": "custom",
-                    }
+                    "tokenizer": "keyword",
+                    "filter": ["lowercase"],
+                    "type": "custom",
                 },
-                analyzer,
+                analyzer["phrase_prefix_analyzer"],
             )
 
             new_settings = deepcopy(ELASTICSEARCH_SETTINGS)
@@ -958,13 +987,11 @@ class TestElasticSearchWithSettings(TestCase):
             analyzer = settings["settings"]["index"]["analysis"]["analyzer"]
             self.assertDictEqual(
                 {
-                    "phrase_prefix_analyzer": {
-                        "tokenizer": "whitespace",
-                        "filter": ["uppercase"],
-                        "type": "custom",
-                    }
+                    "tokenizer": "whitespace",
+                    "filter": ["uppercase"],
+                    "type": "custom",
                 },
-                analyzer,
+                analyzer["phrase_prefix_analyzer"],
             )
 
     def test_put_settings_with_no_changes_existing_settings(self):
@@ -983,8 +1010,6 @@ class TestElasticSearchWithSettings(TestCase):
                 "mapping": {"type": "text"},
             }
 
-            return
-
             new_settings = deepcopy(ELASTICSEARCH_SETTINGS)
             new_settings["settings"]["analysis"]["analyzer"]["prefix_analyzer"] = {
                 "type": "custom",
@@ -997,7 +1022,7 @@ class TestElasticSearchWithSettings(TestCase):
             with self.assertLogs("elastic") as log:
                 self.app.data.init_index()
                 self.assertIn(
-                    "ERROR:elastic:mapping error, updating settings resource=items",
+                    "WARNING:elastic:mapping error, updating settings resource=items",
                     log.output[0],
                 )
 

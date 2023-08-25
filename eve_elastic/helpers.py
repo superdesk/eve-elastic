@@ -363,7 +363,6 @@ def reindex(
     scan_kwargs={},
     bulk_kwargs={},
 ):
-
     """
     Reindex all documents from one index that satisfy a given query
     to another, potentially (if `target_client` is specified) on a different cluster.
