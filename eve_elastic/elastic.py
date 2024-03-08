@@ -5,15 +5,17 @@ import ciso8601
 import pytz  # NOQA
 import logging
 import elasticsearch
+import time
 
 from bson import ObjectId
-from elasticsearch.helpers import bulk, reindex
+from elasticsearch.helpers import bulk, reindex  # noqa: F401
 
 from uuid import uuid4
 from flask import request, abort, json, current_app as app
 from eve.utils import config
 from eve.io.base import DataLayer
 from eve.io.mongo.parser import parse, ParseError
+from elasticsearch import Elasticsearch
 
 
 logging.basicConfig()
@@ -332,14 +334,14 @@ def set_sort(query, sort):
         query["sort"].append(sort_dict)
 
 
-def get_es(url, **kwargs):
+def get_es(url, **kwargs) -> Elasticsearch:
     """Create elasticsearch client instance.
 
     :param url: elasticsearch url
     """
     urls = [url] if isinstance(url, str) else url
     kwargs.setdefault("serializer", ElasticJSONSerializer())
-    es = elasticsearch.Elasticsearch(urls, **kwargs)
+    es = Elasticsearch(urls, **kwargs)
     return es
 
 
@@ -989,7 +991,7 @@ class Elastic(DataLayer):
         px = self._resource_prefix(resource)
         return app.config.get("%s_%s" % (px, key), default)
 
-    def elastic(self, resource):
+    def elastic(self, resource) -> Elasticsearch:
         """Get ElasticSearch instance for given resource."""
         px = self._resource_prefix(resource)
 
@@ -1041,46 +1043,153 @@ class Elastic(DataLayer):
         except elasticsearch.exceptions.RequestError:
             raise
 
-    def reindex(self, resource):
+    def reindex(self, resource, *, requests_per_second=1000):  # noqa: F811
         es = self.elastic(resource)
         alias = self._resource_index(resource)
         settings = self._resource_config(resource, "SETTINGS")
         mapping = self._resource_mapping(resource)
-        new_index = False
+
+        old_index = None
         try:
-            old_index = self.get_index(resource)
+            indexes = es.indices.get_alias(name=alias)
+            for index, aliases in indexes.items():
+                old_index = index
+                specs = aliases["aliases"][alias]
+                if specs and specs["is_write_index"]:
+                    break
         except elasticsearch.exceptions.NotFoundError:
-            new_index = True
+            pass
+
+        if old_index:
+            print("OLD INDEX", old_index)
 
         # create new index
-        index = generate_index_name(alias)
-        print("create", index)
-        self._create_index(es, index, settings)
-        self._put_mapping(es, index, mapping)
+        new_index = generate_index_name(alias)
+        self._create_index(es, new_index, settings)
+        self._put_mapping(es, new_index, mapping)
 
-        if not new_index:
-            # reindex data
-            print("reindex", alias, index)
-            reindex(es, alias, index)
+        print("NEW INDEX", new_index)
 
-            # remove old alias
-            print("remove alias", alias, old_index)
+        if not old_index:
             try:
-                es.indices.delete_alias(index=old_index, name=alias)
+                es.indices.get(index=alias)
+                print("Old index is not using an alias.")
+                _async_reindex(es, alias, new_index)
+                es.indices.update_aliases(
+                    body={
+                        "actions": [
+                            {
+                                "add": {
+                                    "index": new_index,
+                                    "alias": alias,
+                                    "is_write_index": True,
+                                },
+                            },
+                            {
+                                "remove_index": {
+                                    "index": alias,
+                                },
+                            },
+                        ],
+                    }
+                )
             except elasticsearch.exceptions.NotFoundError:
-                # this was not an alias, but an index. will be removed in next step
-                pass
+                print("There is no index to reindex from, done.")
+                es.indices.put_alias(index=new_index, name=alias)
+            return
 
-            # remove old index
-            print("remove index", old_index)
-            es.indices.delete(old_index)
+        # tmp index will be used for new items arriving during reindex
+        tmp_index = f"{old_index}-tmp"
+        self._create_index(es, tmp_index, settings)
+        self._put_mapping(es, tmp_index, mapping)
+        print("TMP INDEX", tmp_index)
 
-        # create alias for new index
-        print("put", alias, index)
-        es.indices.put_alias(index=index, name=alias)
+        # add tmp index as writable
+        es.indices.update_aliases(
+            body={
+                "actions": [
+                    {
+                        "add": {  # add tmp index as write index
+                            "index": tmp_index,
+                            "alias": alias,
+                            "is_write_index": True,
+                        },
+                    },
+                    {
+                        "add": {  # make sure the old index is not write index
+                            "index": old_index,
+                            "alias": alias,
+                            "is_write_index": False,
+                        },
+                    },
+                ],
+            }
+        )
 
-        print("refresh", index)
-        es.indices.refresh(index)
+        _async_reindex(
+            es, old_index, new_index, requests_per_second=requests_per_second
+        )
+
+        # add new index is writable, tmp readonly
+        es.indices.update_aliases(
+            body={
+                "actions": [
+                    {
+                        "add": {  # add new index as write index
+                            "index": new_index,
+                            "alias": alias,
+                            "is_write_index": True,
+                        },
+                    },
+                    {
+                        "add": {  # make tmp index readonly
+                            "index": tmp_index,
+                            "alias": alias,
+                            "is_write_index": False,
+                        },
+                    },
+                    {
+                        "remove_index": {
+                            "index": old_index,
+                        },
+                    },
+                ],
+            }
+        )
+
+        # do it as fast as possible
+        _async_reindex(es, tmp_index, new_index)
+
+        print("REMOVE TMP INDEX", tmp_index)
+        es.indices.delete(index=tmp_index)
+
+
+def _async_reindex(
+    es: Elasticsearch, old_index: str, new_index: str, *, requests_per_second=None
+):
+    resp = es.reindex(
+        body={
+            "source": {"index": old_index},
+            "dest": {"index": new_index, "version_type": "external"},
+        },
+        requests_per_second=requests_per_second,
+        wait_for_completion=False,
+        refresh=True,
+    )
+    task_id = resp["task"]
+    print(f"REINDEXING {old_index} to {new_index} (task {task_id})")
+
+    while True:
+        time.sleep(2.0)
+        task_info = es.tasks.get(task_id=task_id)
+        if task_info["completed"]:
+            total = task_info["response"]["total"]
+            took = int(task_info["response"]["took"] / 1000)  # ms to s
+            print()
+            print(f"DONE reindexing {total} items, took {took}s")
+            break
+        else:
+            print(".", end="")
 
 
 def build_elastic_query(doc):

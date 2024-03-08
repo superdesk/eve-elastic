@@ -3,28 +3,31 @@ name: "Test"
 on: [push, pull_request]
 
 jobs:
-  nose:
+  test:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        elastic-version: [7.12.0, 7.11.2, 7.10.2]
+        python-version: ['3.8', '3.10']
+
+    services:
+      elastic:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+        ports:
+          - 9200:9200
+        env:
+          discovery.type: single-node
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
-        python-version: "3.8"
-
-    - name: install
-      run: |
-          docker pull "docker.elastic.co/elasticsearch/elasticsearch:${{ matrix.elastic-version }}"
-          docker run -d -p 9200:9200 -e "discovery.type=single-node" --tmpfs "/usr/share/elasticsearch/data" "docker.elastic.co/elasticsearch/elasticsearch:${{ matrix.elastic-version }}"
+        python-version: ${{ matrix.python-version }}
+    
+    - run: |
           pip install -r requirements.txt
-          pip install .
+          pip install -e .
           ./scripts/wait-for-elastic.sh
 
-    - name: test
-      run: nosetests
+    - run: pytest
