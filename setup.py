@@ -24,7 +24,7 @@ setup(
         "arrow>=0.4.2",
         "ciso8601>=1.0.2,<2",
         "pytz>=2015.4",
-        "elasticsearch>=7.0,<7.14",
+        "elasticsearch>=7.0,<8.13",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
