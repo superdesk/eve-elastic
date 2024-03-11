@@ -1074,7 +1074,7 @@ class Elastic(DataLayer):
             try:
                 es.indices.get(index=alias)
                 print("Old index is not using an alias.")
-                _async_reindex(es, alias, new_index)
+                _background_reindex(es, alias, new_index)
                 es.indices.update_aliases(
                     body={
                         "actions": [
@@ -1126,7 +1126,7 @@ class Elastic(DataLayer):
             }
         )
 
-        _async_reindex(
+        _background_reindex(
             es, old_index, new_index, requests_per_second=requests_per_second
         )
 
@@ -1158,13 +1158,13 @@ class Elastic(DataLayer):
         )
 
         # do it as fast as possible
-        _async_reindex(es, tmp_index, new_index)
+        _background_reindex(es, tmp_index, new_index)
 
         print("REMOVE TMP INDEX", tmp_index)
         es.indices.delete(index=tmp_index)
 
 
-def _async_reindex(
+def _background_reindex(
     es: Elasticsearch, old_index: str, new_index: str, *, requests_per_second=None
 ):
     resp = es.reindex(
