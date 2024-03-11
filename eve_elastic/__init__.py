@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = "7.3.1"
+__version__ = "7.4.0"
 
 # flake8: noqa
 from .elastic import (
