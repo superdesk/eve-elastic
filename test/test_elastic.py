@@ -2,14 +2,15 @@
 
 import eve
 import time
+import pytest
 import elasticsearch
+
 from unittest import TestCase, skip
 from datetime import datetime
 from copy import deepcopy
 from flask import json
 from eve.utils import config, ParsedRequest, parse_request
 from eve_elastic.elastic import parse_date, Elastic, get_es, generate_index_name
-from nose.tools import raises
 
 from unittest.mock import MagicMock, patch
 
@@ -577,12 +578,12 @@ class TestElastic(TestCase):
         with self.app.app_context():
             self.assertEqual(self.app.data.remove("items", {"_id": "notfound"}), None)
 
-    @raises(elasticsearch.exceptions.ConnectionError)
     def test_it_can_use_configured_url(self):
-        with self.app.app_context():
-            self.app.config["ELASTICSEARCH_URL"] = "http://localhost:9292"
-            elastic = Elastic(self.app)
-            elastic.init_index()
+        with pytest.raises(elasticsearch.exceptions.ConnectionError):
+            with self.app.app_context():
+                self.app.config["ELASTICSEARCH_URL"] = "http://localhost:9292"
+                elastic = Elastic(self.app)
+                elastic.init_index()
 
     def test_resource_aggregates(self):
         with self.app.app_context():
