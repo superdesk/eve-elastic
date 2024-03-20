@@ -1194,7 +1194,11 @@ def _background_reindex(
     # first get total number of items
     while True:
         time.sleep(1.0)
-        task = es.tasks.get(task_id=task_id)
+        try:
+            task = es.tasks.get(task_id=task_id)
+        except elasticsearch.exceptions.NotFoundError:
+            print("Task not found, reindexing done.")
+            return
         if task["completed"]:
             print_task_done(task)
             return
@@ -1206,7 +1210,11 @@ def _background_reindex(
     with progressbar(length=task["task"]["status"]["total"], label="Reindexing") as bar:
         while True:
             time.sleep(2.0)
-            task = es.tasks.get(task_id=task_id)
+            try:
+                task = es.tasks.get(task_id=task_id)
+            except elasticsearch.exceptions.NotFoundError:
+                print("Task not found, reindexing done.")
+                return
             if (
                 task["task"]["status"]["created"]
                 and task["task"]["status"]["created"] > last_created
