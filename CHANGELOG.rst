@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+7.4.1 (2024-03-20)
+++++++++++++++++++
+
+- fix reindexing when task info is missing.
+
 7.4.0 (2024-03-11)
 ++++++++++++++++++
 
