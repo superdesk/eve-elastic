@@ -12,7 +12,7 @@ from elasticsearch.helpers import bulk, reindex  # noqa: F401
 
 from click import progressbar
 from uuid import uuid4
-from flask import request, abort, json, current_app as app
+from quart import request, abort, json, current_app as app
 from eve.utils import config
 from eve.io.base import DataLayer
 from eve.io.mongo.parser import parse, ParseError
