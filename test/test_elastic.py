@@ -230,8 +230,8 @@ class TestElastic(TestCase):
                     },
                 ],
             )
-            self.assertEquals(3, count)
-            self.assertEquals(0, len(_errors))
+            self.assertEqual(3, count)
+            self.assertEqual(0, len(_errors))
 
     def test_query_filter_with_filter_dsl_and_schema_filter(self):
         with self.app.app_context():
@@ -710,7 +710,7 @@ class TestElastic(TestCase):
         with self.app.test_request_context("/items/?q=foo"):
             req = parse_request("items")
             cursor, count = self.app.data.find("items", req, None)
-            self.assertEquals(1, cursor.count())
+            self.assertEqual(1, cursor.count())
 
     def test_phrase_search_query(self):
         with self.app.app_context():
@@ -719,12 +719,12 @@ class TestElastic(TestCase):
         with self.app.test_request_context('/items/?q="foo bar"'):
             req = parse_request("items")
             cursor, count = self.app.data.find("items", req, None)
-            self.assertEquals(1, cursor.count())
+            self.assertEqual(1, cursor.count())
 
         with self.app.test_request_context('/items/?q="bar foo"'):
             req = parse_request("items")
             cursor, count = self.app.data.find("items", req, None)
-            self.assertEquals(0, cursor.count())
+            self.assertEqual(0, cursor.count())
 
     def test_elastic_filter_callback(self):
         with self.app.app_context():
@@ -1280,8 +1280,8 @@ class TestElasticSearchParentChild(TestCase):
                     {"_id": "u3", "name": "foo", "item_id": "item3"},
                 ],
             )
-            self.assertEquals(3, count)
-            self.assertEquals(0, len(_errors))
+            self.assertEqual(3, count)
+            self.assertEqual(0, len(_errors))
 
     def test_replace_child_item(self):
         with self.app.app_context():
