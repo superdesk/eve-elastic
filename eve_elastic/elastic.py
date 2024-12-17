@@ -1067,10 +1067,13 @@ class Elastic(DataLayer):
 
         # create new index
         new_index = generate_index_name(alias)
-        es.indices.create(index=new_index, body={
-            "settings": {"index": settings["settings"]} if settings else {},
-            "mappings": fix_mapping(mappings) if mappings else {},
-        })
+        es.indices.create(
+            index=new_index,
+            body={
+                "settings": {"index": settings["settings"]} if settings else {},
+                "mappings": fix_mapping(mappings) if mappings else {},
+            },
+        )
 
         print("NEW INDEX", new_index)
 
@@ -1110,10 +1113,16 @@ class Elastic(DataLayer):
 
         # tmp index will be used for new items arriving during reindex
         tmp_index = f"{old_index}-tmp"
-        es.indices.rollover(alias=alias, new_index=tmp_index, body={
-            "mappings": old_mappings[old_index]["mappings"] if old_mappings else mappings,
-            "settings": {"index": settings["settings"]} if settings else None,
-        })
+        es.indices.rollover(
+            alias=alias,
+            new_index=tmp_index,
+            body={
+                "mappings": (
+                    old_mappings[old_index]["mappings"] if old_mappings else mappings
+                ),
+                "settings": {"index": settings["settings"]} if settings else None,
+            },
+        )
 
         print("TMP INDEX", tmp_index)
 

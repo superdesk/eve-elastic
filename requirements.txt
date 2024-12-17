@@ -1,2 +1,4 @@
-pytest
+black==24.10.0
 eve>1.1,<2.2
+flake8==7.1.1
+pytest==8.3.4

@@ -19,7 +19,6 @@ setup(
     url="https://github.com/petrjasek/eve-elastic",
     packages=["eve_elastic"],
     test_suite="test.test_elastic",
-    tests_require=["nose", "flake8"],
     install_requires=[
         "arrow>=0.4.2",
         "ciso8601>=1.0.2,<3",
