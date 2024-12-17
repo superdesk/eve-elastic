@@ -1120,7 +1120,7 @@ class Elastic(DataLayer):
                 "mappings": (
                     old_mappings[old_index]["mappings"] if old_mappings else mappings
                 ),
-                "settings": {"index": settings["settings"]} if settings else None,
+                "settings": {"index": settings["settings"]} if settings else {},
             },
         )
 
