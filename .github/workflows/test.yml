@@ -27,8 +27,8 @@ jobs:
         cache: 'pip'
     
     - run: |
-          pip install -r requirements.txt
-          pip install -e .
+          python -m pip install -Ur requirements.txt
+          python -m pip install -U --editable .
           ./scripts/wait-for-elastic.sh
 
     - run: pytest
