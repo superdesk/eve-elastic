@@ -918,6 +918,25 @@ class TestElastic(TestCase):
 
             assert es.indices.exists_alias(alias)
 
+    def test_reindex(self):
+        ITEMS = "items"
+        with self.app.app_context():
+            elastic = self.app.data
+            elastic.insert(ITEMS, [{"uri": "foo", "name": "item"}])
+            old_index = elastic.get_index(ITEMS)
+            elastic.reindex(ITEMS)
+            new_index = elastic.get_index(ITEMS)
+            assert old_index != new_index
+            docs = elastic.search(
+                {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
+                ITEMS,
+            )
+            self.assertEqual(1, docs.count())
+
 
 class TestElasticSearchWithSettings(TestCase):
     resource = "items"

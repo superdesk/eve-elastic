@@ -1048,13 +1048,14 @@ class Elastic(DataLayer):
         es = self.elastic(resource)
         alias = self._resource_index(resource)
         settings = self._resource_config(resource, "SETTINGS")
-        mapping = self._resource_mapping(resource)
+        mappings = self._resource_mapping(resource)
 
-        old_index = None
+        old_index = old_mappings = None
         try:
             indexes = es.indices.get_alias(name=alias)
             for index, aliases in indexes.items():
                 old_index = index
+                old_mappings = es.indices.get_mapping(index=index)
                 specs = aliases["aliases"][alias]
                 if specs and specs["is_write_index"]:
                     break
@@ -1066,8 +1067,13 @@ class Elastic(DataLayer):
 
         # create new index
         new_index = generate_index_name(alias)
-        self._create_index(es, new_index, settings)
-        self._put_mapping(es, new_index, mapping)
+        es.indices.create(
+            index=new_index,
+            body={
+                "settings": {"index": settings["settings"]} if settings else {},
+                "mappings": fix_mapping(mappings) if mappings else {},
+            },
+        )
 
         print("NEW INDEX", new_index)
 
@@ -1107,31 +1113,18 @@ class Elastic(DataLayer):
 
         # tmp index will be used for new items arriving during reindex
         tmp_index = f"{old_index}-tmp"
-        self._create_index(es, tmp_index, settings)
-        self._put_mapping(es, tmp_index, mapping)
-        print("TMP INDEX", tmp_index)
-
-        # add tmp index as writable
-        es.indices.update_aliases(
+        es.indices.rollover(
+            alias=alias,
+            new_index=tmp_index,
             body={
-                "actions": [
-                    {
-                        "add": {  # add tmp index as write index
-                            "index": tmp_index,
-                            "alias": alias,
-                            "is_write_index": True,
-                        },
-                    },
-                    {
-                        "add": {  # make sure the old index is not write index
-                            "index": old_index,
-                            "alias": alias,
-                            "is_write_index": False,
-                        },
-                    },
-                ],
-            }
+                "mappings": (
+                    old_mappings[old_index]["mappings"] if old_mappings else mappings
+                ),
+                "settings": {"index": settings["settings"]} if settings else {},
+            },
         )
+
+        print("TMP INDEX", tmp_index)
 
         _background_reindex(
             es, old_index, new_index, requests_per_second=requests_per_second
