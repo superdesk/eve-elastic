@@ -18,7 +18,7 @@ dependencies = [
 license = {file = "LICENSE"}
 authors = [
     {name = "Petr Jasek"},
-    {name = "Mark Lark"},
+    {name = "Mark Pittaway"},
 ]
 readme = "README.rst"
 requires-python = ">=3.9"
