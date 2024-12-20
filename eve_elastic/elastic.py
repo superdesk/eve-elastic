@@ -415,13 +415,16 @@ class Elastic(DataLayer):
                     "mapping error, updating settings resource=%s", _resource
                 )
 
-    def _init_index(self, es, index, settings=None, mapping=None):
+    def _init_index(
+        self, es: Elasticsearch, index: str, settings=None, mappings=None
+    ):
         if not es.indices.exists(index):
-            self._create_index_from_alias(es, index, settings)
-        elif settings:
-            self._put_settings(es, index, settings)
-        if mapping:
-            self._put_mapping(es, index, mapping)
+            self._create_index_from_alias(es, index, settings, mappings)
+        else:
+            if settings:
+                self._put_settings(es, index, settings)
+            if mappings:
+                self._put_mappings(es, index, mappings)
 
     def get_datasource(self, resource):
         return getattr(self, "_datasource", self.datasource)(resource)
@@ -458,17 +461,22 @@ class Elastic(DataLayer):
         elif schema["type"] == "integer":
             return {"type": "integer"}
 
-    def _create_index_from_alias(self, es, alias, settings=None):
+    def _create_index_from_alias(
+        self, es: Elasticsearch, alias: str, settings=None, mappings=None
+    ) -> None:
         """Create new index and ignore if it exists already."""
-        try:
-            index = generate_index_name(alias)
-            self._create_index(es, index, settings)
-            es.indices.put_alias(index, alias)
-            logger.info("created index alias=%s index=%s" % (alias, index))
-        except elasticsearch.TransportError:  # index exists
-            pass
+        index = generate_index_name(alias)
+        es.indices.create(
+            index=index,
+            body={
+                "aliases": {alias: {}},
+                "settings": {"index": settings["settings"]} if settings else {},
+                "mappings": fix_mapping(mappings) if mappings else {},
+            },
+        )
+        logger.info("created index index=%s alias=%s", index, alias)
 
-    def _create_index(self, es, index, settings=None):
+    def _create_index(self, es: Elasticsearch, index, settings=None):
         args = {"index": index, "body": {}}
         if settings:
             args["body"].update(settings)
@@ -520,7 +528,7 @@ class Elastic(DataLayer):
         properties["properties"].pop("_id", None)
         return properties
 
-    def _put_mapping(self, es, index, mapping=None):
+    def _put_mappings(self, es, index, mapping=None):
         if mapping:
             es.indices.put_mapping(index=index, body=fix_mapping(mapping))
 

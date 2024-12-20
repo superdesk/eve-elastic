@@ -3,6 +3,7 @@
 import eve
 import time
 import pytest
+import logging
 import elasticsearch
 
 from unittest import TestCase, skip
@@ -13,6 +14,9 @@ from eve.utils import config, ParsedRequest, parse_request
 from eve_elastic.elastic import parse_date, Elastic, get_es, generate_index_name
 
 from unittest.mock import MagicMock, patch
+
+
+logging.getLogger("elasticsearch").setLevel(logging.DEBUG)
 
 
 def highlight_callback(query_string):
