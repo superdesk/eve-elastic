@@ -7,7 +7,7 @@ packages = ["eve_elastic"]
 
 [project]
 name = "Eve-Elastic"
-version = "7.4.2"
+version = "7.4.3"
 description = "Elasticsearch data layer for eve rest framework"
 dependencies = [
     "arrow>=0.4.2",
