@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ['3.8', '3.10']
+        python-version: ['3.10', '3.12']
 
     services:
       elastic:
@@ -19,15 +19,16 @@ jobs:
           discovery.type: single-node
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+        cache: 'pip'
     
     - run: |
-          pip install -r requirements.txt
-          pip install -e .
+          python -m pip install -Ur requirements.txt
+          python -m pip install -U --editable .
           ./scripts/wait-for-elastic.sh
 
     - run: pytest

@@ -3,6 +3,7 @@
 import eve
 import time
 import pytest
+import logging
 import elasticsearch
 
 from unittest import TestCase, skip
@@ -13,6 +14,9 @@ from eve.utils import config, ParsedRequest, parse_request
 from eve_elastic.elastic import parse_date, Elastic, get_es, generate_index_name
 
 from unittest.mock import MagicMock, patch
+
+
+logging.getLogger("elasticsearch").setLevel(logging.DEBUG)
 
 
 def highlight_callback(query_string):
@@ -102,7 +106,10 @@ DOMAIN = {
         },
     },
     "items_foo": {
-        "schema": {"uri": {"type": "string"}, "firstcreated": {"type": "datetime"}},
+        "schema": {
+            "uri": {"type": "string"},
+            "firstcreated": {"type": "datetime"},
+        },
         "datasource": {"backend": "elastic"},
         "elastic_prefix": "FOO",
     },
@@ -185,7 +192,9 @@ class TestElastic(TestCase):
         self.assertIn("dateline", items_mapping)
         dateline_mapping = items_mapping["dateline"]
         self.assertIn("created", dateline_mapping["properties"])
-        self.assertEqual("date", dateline_mapping["properties"]["created"]["type"])
+        self.assertEqual(
+            "date", dateline_mapping["properties"]["created"]["type"]
+        )
 
         self.assertIn("place", items_mapping)
         place_mapping = items_mapping["place"]
@@ -195,12 +204,17 @@ class TestElastic(TestCase):
     def test_dates_are_parsed_on_fetch(self):
         with self.app.app_context():
             ids = self.app.data.insert(
-                "items", [{"uri": "test", "firstcreated": "2012-10-10T11:12:13+0000"}]
+                "items",
+                [{"uri": "test", "firstcreated": "2012-10-10T11:12:13+0000"}],
             )
             self.app.data.update(
-                "published_items", ids[0], {"published": "2012-10-10T12:12:13+0000"}
+                "published_items",
+                ids[0],
+                {"published": "2012-10-10T12:12:13+0000"},
             )
-            item = self.app.data.find_one("published_items", req=None, uri="test")
+            item = self.app.data.find_one(
+                "published_items", req=None, uri="test"
+            )
             self.assertIsInstance(item["firstcreated"], datetime)
             self.assertIsInstance(item["published"], datetime)
 
@@ -230,8 +244,8 @@ class TestElastic(TestCase):
                     },
                 ],
             )
-            self.assertEquals(3, count)
-            self.assertEquals(0, len(_errors))
+            self.assertEqual(3, count)
+            self.assertEqual(0, len(_errors))
 
     def test_query_filter_with_filter_dsl_and_schema_filter(self):
         with self.app.app_context():
@@ -262,19 +276,25 @@ class TestElastic(TestCase):
         with self.app.app_context():
             req = ParsedRequest()
             req.args = {"filter": json.dumps(query_filter)}
-            cursor, count = self.app.data.find("items_with_description", req, None)
+            cursor, count = self.app.data.find(
+                "items_with_description", req, None
+            )
             self.assertEqual(1, count)
 
         with self.app.app_context():
             req = ParsedRequest()
             req.args = {"q": "bar", "filter": json.dumps(query_filter)}
-            cursor, count = self.app.data.find("items_with_description", req, None)
+            cursor, count = self.app.data.find(
+                "items_with_description", req, None
+            )
             self.assertEqual(0, count)
 
     def test_find_one_by_id(self):
         """elastic 1.0+ is using 'found' property instead of 'exists'"""
         with self.app.app_context():
-            self.app.data.insert("items", [{"uri": "test", config.ID_FIELD: "testid"}])
+            self.app.data.insert(
+                "items", [{"uri": "test", config.ID_FIELD: "testid"}]
+            )
             item = self.app.data.find_one(
                 "items", req=None, **{config.ID_FIELD: "testid"}
             )
@@ -283,9 +303,12 @@ class TestElastic(TestCase):
     def test_find_one_multiple_criteria(self):
         with self.app.app_context():
             self.app.data.insert(
-                "items", [{"uri": "test", "name": "foo", config.ID_FIELD: "testid"}]
+                "items",
+                [{"uri": "test", "name": "foo", config.ID_FIELD: "testid"}],
             )
-            item = self.app.data.find_one("items", req=None, name="foo", uri="test")
+            item = self.app.data.find_one(
+                "items", req=None, name="foo", uri="test"
+            )
             self.assertEqual("testid", item[config.ID_FIELD])
 
     def test_formating_fields(self):
@@ -338,7 +361,8 @@ class TestElastic(TestCase):
             es_highlight = res[0].get("es_highlight")
             self.assertIsNotNone(es_highlight)
             self.assertEqual(
-                es_highlight.get("name")[0], '<span class="es-highlight">foo</span>'
+                es_highlight.get("name")[0],
+                '<span class="es-highlight">foo</span>',
             )
             self.assertEqual(
                 es_highlight.get("description")[0],
@@ -407,7 +431,13 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {
                 "projections": json.dumps(
-                    ["priority", "urgency", "word_count", "slugline", "highlights"]
+                    [
+                        "priority",
+                        "urgency",
+                        "word_count",
+                        "slugline",
+                        "highlights",
+                    ]
                 )
             }
             self.assertTrue(self.app.data.should_project(req))
@@ -421,12 +451,19 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {
                 "projections": json.dumps(
-                    ["priority", "urgency", "word_count", "slugline", "highlights"]
+                    [
+                        "priority",
+                        "urgency",
+                        "word_count",
+                        "slugline",
+                        "highlights",
+                    ]
                 )
             }
             fields = self.app.data.get_projected_fields(req)
             self.assertEqual(
-                fields, "priority,urgency,word_count,slugline,highlights,_resource"
+                fields,
+                "priority,urgency,word_count,slugline,highlights,_resource",
             )
 
     def test_eve_projection(self):
@@ -537,13 +574,16 @@ class TestElastic(TestCase):
             req.args["source"] = json.dumps(
                 {"query": {"bool": {"must": [{"term": {"uri": "bar"}}]}}}
             )
-            cursor, count = self.app.data.find("items_with_description", req, None)
+            cursor, count = self.app.data.find(
+                "items_with_description", req, None
+            )
             self.assertEqual(0, count)
 
     def test_where_filter(self):
         with self.app.app_context():
             self.app.data.insert(
-                "items", [{"uri": "foo", "name": "foo"}, {"uri": "bar", "name": "bar"}]
+                "items",
+                [{"uri": "foo", "name": "foo"}, {"uri": "bar", "name": "bar"}],
             )
 
         with self.app.test_client() as c:
@@ -562,12 +602,15 @@ class TestElastic(TestCase):
                 "items", ids[0], {"uri": "bar", "_id": ids[0], "_type": "items"}
             )
             self.assertEqual(
-                self.app.data.find_one("items", req=None, _id=ids[0])["uri"], "bar"
+                self.app.data.find_one("items", req=None, _id=ids[0])["uri"],
+                "bar",
             )
 
     def test_remove_by_id(self):
         with self.app.app_context():
-            self.ids = self.app.data.insert("items", [{"uri": "foo"}, {"uri": "bar"}])
+            self.ids = self.app.data.insert(
+                "items", [{"uri": "foo"}, {"uri": "bar"}]
+            )
             self.app.data.remove("items", {"_id": self.ids[0]})
             req = ParsedRequest()
             req.args = {}
@@ -576,7 +619,9 @@ class TestElastic(TestCase):
 
     def test_remove_non_existing_item(self):
         with self.app.app_context():
-            self.assertEqual(self.app.data.remove("items", {"_id": "notfound"}), None)
+            self.assertEqual(
+                self.app.data.remove("items", {"_id": "notfound"}), None
+            )
 
     def test_it_can_use_configured_url(self):
         with pytest.raises(elasticsearch.exceptions.ConnectionError):
@@ -626,12 +671,16 @@ class TestElastic(TestCase):
             req = ParsedRequest()
             req.args = {}
             response = {}
-            cursor, count = self.app.data.find("items_with_description", req, {})
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {}
+            )
             cursor.extra(response)
             self.assertNotIn("_aggregations", response)
 
             req.args = {"aggregations": 1}
-            cursor, count = self.app.data.find("items_with_description", req, {})
+            cursor, count = self.app.data.find(
+                "items_with_description", req, {}
+            )
             cursor.extra(response)
             self.assertIn("_aggregations", response)
 
@@ -671,9 +720,12 @@ class TestElastic(TestCase):
             cursor.extra(res)
             self.assertEqual(1, cursor.count())
             self.assertIn(
-                {"key": "test", "doc_count": 1}, res["_aggregations"]["type"]["buckets"]
+                {"key": "test", "doc_count": 1},
+                res["_aggregations"]["type"]["buckets"],
             )
-            self.assertEqual(1, res["_aggregations"]["type"]["buckets"][0]["doc_count"])
+            self.assertEqual(
+                1, res["_aggregations"]["type"]["buckets"][0]["doc_count"]
+            )
 
     def test_filter_without_args(self):
         with self.app.app_context():
@@ -693,7 +745,10 @@ class TestElastic(TestCase):
             query = {
                 "query": {
                     "bool": {
-                        "must": [{"term": {"uri": "foo"}}, {"term": {"uri": "bar"}}]
+                        "must": [
+                            {"term": {"uri": "foo"}},
+                            {"term": {"uri": "bar"}},
+                        ]
                     }
                 }
             }
@@ -710,21 +765,23 @@ class TestElastic(TestCase):
         with self.app.test_request_context("/items/?q=foo"):
             req = parse_request("items")
             cursor, count = self.app.data.find("items", req, None)
-            self.assertEquals(1, cursor.count())
+            self.assertEqual(1, cursor.count())
 
     def test_phrase_search_query(self):
         with self.app.app_context():
-            self.app.data.insert("items", [{"uri": "foo bar"}, {"uri": "some text"}])
+            self.app.data.insert(
+                "items", [{"uri": "foo bar"}, {"uri": "some text"}]
+            )
 
         with self.app.test_request_context('/items/?q="foo bar"'):
             req = parse_request("items")
             cursor, count = self.app.data.find("items", req, None)
-            self.assertEquals(1, cursor.count())
+            self.assertEqual(1, cursor.count())
 
         with self.app.test_request_context('/items/?q="bar foo"'):
             req = parse_request("items")
             cursor, count = self.app.data.find("items", req, None)
-            self.assertEquals(0, cursor.count())
+            self.assertEqual(0, cursor.count())
 
     def test_elastic_filter_callback(self):
         with self.app.app_context():
@@ -734,14 +791,19 @@ class TestElastic(TestCase):
 
         with self.app.test_request_context("test?uri=foo"):
             req = parse_request("items_with_callback_filter")
-            cursor, count = self.app.data.find("items_with_callback_filter", req, None)
+            cursor, count = self.app.data.find(
+                "items_with_callback_filter", req, None
+            )
             self.assertEqual(1, cursor.count())
 
     def test_elastic_sort_by_score_if_there_is_query(self):
         with self.app.app_context():
             self.app.data.insert(
                 "items",
-                [{"uri": "foo", "name": "foo bar"}, {"uri": "bar", "name": "foo bar"}],
+                [
+                    {"uri": "foo", "name": "foo bar"},
+                    {"uri": "bar", "name": "foo bar"},
+                ],
             )
 
         with self.app.test_request_context("/items/"):
@@ -766,7 +828,9 @@ class TestElastic(TestCase):
         self.app.data.drop_index()
 
         with self.app.app_context():
-            self.app.config["ELASTICSEARCH_INDEXES"] = {archived_type: archived_index}
+            self.app.config["ELASTICSEARCH_INDEXES"] = {
+                archived_type: archived_index
+            }
             self.assertIn(archived_type, self.app.config["SOURCES"])
 
         self.assertFalse(self.es.indices.exists(archived_index))
@@ -777,14 +841,19 @@ class TestElastic(TestCase):
             self.app.data.init_index()
 
         self.assertTrue(self.es.indices.exists(archived_index))
-        self.assertEqual(0, self.es.count(archived_index, archived_type)["count"])
+        self.assertEqual(
+            0, self.es.count(archived_index, archived_type)["count"]
+        )
 
         with self.app.app_context():
             self.app.data.insert(
-                archived_type, [{"name": "foo", "archived": "2013-01-01T11:12:13+0000"}]
+                archived_type,
+                [{"name": "foo", "archived": "2013-01-01T11:12:13+0000"}],
             )
 
-        self.assertEqual(1, self.es.count(archived_index, archived_type)["count"])
+        self.assertEqual(
+            1, self.es.count(archived_index, archived_type)["count"]
+        )
 
         with self.app.app_context():
             item = self.app.data.find_one(archived_type, req=None, name="foo")
@@ -794,7 +863,8 @@ class TestElastic(TestCase):
         with self.app.app_context():
             self.app.config["ELASTICSEARCH_FORCE_REFRESH"] = False
             ids = self.app.data.insert(
-                "items", [{"uri": "foo", "name": "foo"}, {"uri": "bar", "name": "bar"}]
+                "items",
+                [{"uri": "foo", "name": "foo"}, {"uri": "bar", "name": "bar"}],
             )
 
             item = self.app.data.find_one("items", req=None, _id=ids[0])
@@ -807,15 +877,21 @@ class TestElastic(TestCase):
 
     def test_elastic_prefix(self):
         with self.app.app_context():
-            mapping = self.app.data.get_mapping("items_foo")["mappings"]["properties"]
+            mapping = self.app.data.get_mapping("items_foo")["mappings"][
+                "properties"
+            ]
             self.assertIn("firstcreated", mapping)
 
             self.app.data.insert("items_foo_default_index", [{"uri": "test"}])
-            foo_items, count = self.app.data.find("items_foo", ParsedRequest(), None)
+            foo_items, count = self.app.data.find(
+                "items_foo", ParsedRequest(), None
+            )
             self.assertEqual(0, foo_items.count())
 
             self.app.data.insert("items_foo", [{"uri": "foo"}, {"uri": "bar"}])
-            foo_items, count = self.app.data.find("items_foo", ParsedRequest(), None)
+            foo_items, count = self.app.data.find(
+                "items_foo", ParsedRequest(), None
+            )
             self.assertEqual(2, foo_items.count())
 
     def test_retry_on_conflict(self):
@@ -918,6 +994,25 @@ class TestElastic(TestCase):
 
             assert es.indices.exists_alias(alias)
 
+    def test_reindex(self):
+        ITEMS = "items"
+        with self.app.app_context():
+            elastic = self.app.data
+            elastic.insert(ITEMS, [{"uri": "foo", "name": "item"}])
+            old_index = elastic.get_index(ITEMS)
+            elastic.reindex(ITEMS)
+            new_index = elastic.get_index(ITEMS)
+            assert old_index != new_index
+            docs = elastic.search(
+                {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
+                ITEMS,
+            )
+            self.assertEqual(1, docs.count())
+
 
 class TestElasticSearchWithSettings(TestCase):
     resource = "items"
@@ -981,7 +1076,11 @@ class TestElasticSearchWithSettings(TestCase):
 
             new_settings["settings"]["analysis"]["analyzer"][
                 "phrase_prefix_analyzer"
-            ] = {"type": "custom", "tokenizer": "whitespace", "filter": ["uppercase"]}
+            ] = {
+                "type": "custom",
+                "tokenizer": "whitespace",
+                "filter": ["uppercase"],
+            }
 
             self.app.data.put_settings(self.resource, new_settings)
             settings = self.app.data.get_settings(self.resource)
@@ -1000,7 +1099,9 @@ class TestElasticSearchWithSettings(TestCase):
             with patch.object(
                 self.app.data.es.indices, "close", side_effect=KeyError
             ) as indices_close:
-                self.app.data.put_settings(self.resource, ELASTICSEARCH_SETTINGS)
+                self.app.data.put_settings(
+                    self.resource, ELASTICSEARCH_SETTINGS
+                )
             indices_close.assert_not_called()
 
     def test_put_settings_existing_index(self):
@@ -1012,7 +1113,9 @@ class TestElasticSearchWithSettings(TestCase):
             }
 
             new_settings = deepcopy(ELASTICSEARCH_SETTINGS)
-            new_settings["settings"]["analysis"]["analyzer"]["prefix_analyzer"] = {
+            new_settings["settings"]["analysis"]["analyzer"][
+                "prefix_analyzer"
+            ] = {
                 "type": "custom",
                 "tokenizer": "whitespace",
                 "filter": ["uppercase"],
@@ -1048,7 +1151,10 @@ class TestElasticSearchParentChild(TestCase):
 
     domain = {
         "items": {
-            "schema": {"name": {"type": "string"}, "headline": {"type": "string"}},
+            "schema": {
+                "name": {"type": "string"},
+                "headline": {"type": "string"},
+            },
             "datasource": {"backend": "elastic"},
         },
         "child_items": {
@@ -1084,7 +1190,9 @@ class TestElasticSearchParentChild(TestCase):
     def checkVersion(self):
         with self.app.app_context():
             info = self.es.info()
-            self.version_2x = info.get("version", {}).get("number", "").startswith("2")
+            self.version_2x = (
+                info.get("version", {}).get("number", "").startswith("2")
+            )
 
     def test_child_items_mapping(self):
         with self.app.app_context():
@@ -1105,7 +1213,8 @@ class TestElasticSearchParentChild(TestCase):
     def test_insert_child_item(self):
         with self.app.app_context():
             self.app.data.insert(
-                self.parent_item, [{"_id": "foo", "name": "foo", "headline": "test"}]
+                self.parent_item,
+                [{"_id": "foo", "name": "foo", "headline": "test"}],
             )
             self.app.data.insert(
                 self.child_item,
@@ -1119,7 +1228,9 @@ class TestElasticSearchParentChild(TestCase):
                 ],
             )
 
-            parent = self.app.data.find_one(self.parent_item, req=None, _id="foo")
+            parent = self.app.data.find_one(
+                self.parent_item, req=None, _id="foo"
+            )
             self.assertEqual(parent["_id"], "foo")
             self.assertEqual(parent["name"], "foo")
             child = self.app.data.find_one(
@@ -1130,7 +1241,9 @@ class TestElasticSearchParentChild(TestCase):
             self.assertEqual(child["item_id"], "foo")
 
             # without parent
-            child = self.app.data.find_one(self.child_item, req=None, _id="childfoo")
+            child = self.app.data.find_one(
+                self.child_item, req=None, _id="childfoo"
+            )
             self.assertEqual(child["_id"], "childfoo")
             self.assertEqual(child["name"], "childfoo")
             self.assertEqual(child["item_id"], "foo")
@@ -1159,7 +1272,8 @@ class TestElasticSearchParentChild(TestCase):
     def test_update_child_item(self):
         with self.app.app_context():
             self.app.data.insert(
-                self.parent_item, [{"_id": "foo", "name": "foo", "headline": "test"}]
+                self.parent_item,
+                [{"_id": "foo", "name": "foo", "headline": "test"}],
             )
             self.app.data.insert(
                 self.child_item,
@@ -1204,7 +1318,8 @@ class TestElasticSearchParentChild(TestCase):
     def test_update_child_item_with_no_parent_raises_exception(self):
         with self.app.app_context():
             self.app.data.insert(
-                self.parent_item, [{"_id": "foo", "name": "foo", "headline": "test"}]
+                self.parent_item,
+                [{"_id": "foo", "name": "foo", "headline": "test"}],
             )
             self.app.data.insert(
                 self.child_item,
@@ -1231,14 +1346,17 @@ class TestElasticSearchParentChild(TestCase):
 
             self.assertEqual(cm.exception.status_code, 400)
             if self.version_2x:
-                self.assertEqual(cm.exception.error, "routing_missing_exception")
+                self.assertEqual(
+                    cm.exception.error, "routing_missing_exception"
+                )
             else:
                 self.assertIn("RoutingMissingException", cm.exception.error)
 
     def test_update_child_item_and_change_parent_raises_exception(self):
         with self.app.app_context():
             self.app.data.insert(
-                self.parent_item, [{"_id": "foo", "name": "foo", "headline": "test"}]
+                self.parent_item,
+                [{"_id": "foo", "name": "foo", "headline": "test"}],
             )
             self.app.data.insert(
                 self.child_item,
@@ -1266,7 +1384,9 @@ class TestElasticSearchParentChild(TestCase):
 
             self.assertEqual(cm.exception.status_code, 404)
             if self.version_2x:
-                self.assertEqual(cm.exception.error, "document_missing_exception")
+                self.assertEqual(
+                    cm.exception.error, "document_missing_exception"
+                )
             else:
                 self.assertIn("DocumentMissingException", cm.exception.error)
 
@@ -1280,13 +1400,14 @@ class TestElasticSearchParentChild(TestCase):
                     {"_id": "u3", "name": "foo", "item_id": "item3"},
                 ],
             )
-            self.assertEquals(3, count)
-            self.assertEquals(0, len(_errors))
+            self.assertEqual(3, count)
+            self.assertEqual(0, len(_errors))
 
     def test_replace_child_item(self):
         with self.app.app_context():
             res = self.app.data.insert(
-                self.child_item, [{"_id": "foo", "name": "testing", "item_id": "test"}]
+                self.child_item,
+                [{"_id": "foo", "name": "testing", "item_id": "test"}],
             )
             self.assertEqual(1, len(res))
             new_item = {"name": "bar", "item_id": "test"}
@@ -1296,7 +1417,8 @@ class TestElasticSearchParentChild(TestCase):
     def test_replace_child_item_with_no_parent_raises_exception(self):
         with self.app.app_context():
             res = self.app.data.insert(
-                self.child_item, [{"_id": "foo", "name": "testing", "item_id": "test"}]
+                self.child_item,
+                [{"_id": "foo", "name": "testing", "item_id": "test"}],
             )
             self.assertEqual(1, len(res))
             with self.assertRaises(elasticsearch.TransportError) as cm:
@@ -1305,7 +1427,9 @@ class TestElasticSearchParentChild(TestCase):
 
             self.assertEqual(cm.exception.status_code, 400)
             if self.version_2x:
-                self.assertEqual(cm.exception.error, "routing_missing_exception")
+                self.assertEqual(
+                    cm.exception.error, "routing_missing_exception"
+                )
             else:
                 self.assertIn("RoutingMissingException", cm.exception.error)
 
@@ -1358,7 +1482,8 @@ class TestElasticSearchParentChild(TestCase):
     def test_remove_child(self):
         with self.app.app_context():
             self.app.data.insert(
-                self.parent_item, [{"_id": "foo", "name": "foo", "headline": "test"}]
+                self.parent_item,
+                [{"_id": "foo", "name": "foo", "headline": "test"}],
             )
             self.app.data.insert(
                 self.child_item,
@@ -1442,7 +1567,9 @@ class TestElasticInnerHits(TestCase):
                                     "inner_hits": {},
                                     "query": {
                                         "bool": {
-                                            "must": [{"term": {"service.code": "a"}}]
+                                            "must": [
+                                                {"term": {"service.code": "a"}}
+                                            ]
                                         }
                                     },
                                 }
@@ -1457,9 +1584,13 @@ class TestElasticInnerHits(TestCase):
             self.assertEqual(2, results.count())
             self.assertEqual(results[0].get("_id"), "foo")
             self.assertEqual(len(results[0].get("_inner_hits")), 1)
-            self.assertEqual(results[0].get("_inner_hits")["service"][0]["code"], "a")
+            self.assertEqual(
+                results[0].get("_inner_hits")["service"][0]["code"], "a"
+            )
             self.assertEqual(results[1].get("_id"), "bar")
-            self.assertEqual(results[1].get("_inner_hits")["service"][0]["code"], "a")
+            self.assertEqual(
+                results[1].get("_inner_hits")["service"][0]["code"], "a"
+            )
 
 
 class TestElasticNested(TestCase):

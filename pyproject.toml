@@ -1,0 +1,40 @@
+[build.system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["eve_elastic"]
+
+[project]
+name = "Eve-Elastic"
+version = "7.4.3"
+description = "Elasticsearch data layer for eve rest framework"
+dependencies = [
+    "arrow>=0.4.2",
+    "ciso8601>=1.0.2,<3",
+    "pytz>=2015.4",
+    "elasticsearch>=7.0,<8.0",
+]
+license = {file = "LICENSE"}
+authors = [
+    {name = "Petr Jasek"},
+    {name = "Mark Pittaway"},
+]
+readme = "README.rst"
+requires-python = ">=3.9"
+classifiers=[
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+
+[project.urls]
+Repository = "https://github.com/superdesk/eve-elastic"
+
+[tool.ruff]
+line-length = 80

@@ -146,7 +146,9 @@ def fix_query(query, top=True, context=None):
         return query
 
     if isinstance(query, list):
-        return [fix_query(_query, top=False, context=context) for _query in query]
+        return [
+            fix_query(_query, top=False, context=context) for _query in query
+        ]
     elif not isinstance(query, dict):
         return query
 
@@ -169,13 +171,17 @@ def fix_query(query, top=True, context=None):
         elif key == "or":
             new_query.setdefault("bool", {})
             merge_queries(
-                new_query["bool"], "should", fix_query(val, top=False, context=context)
+                new_query["bool"],
+                "should",
+                fix_query(val, top=False, context=context),
             )
             new_query["bool"]["minimum_should_match"] = 1
         elif key == "and":
             new_query.setdefault("bool", {})
             merge_queries(
-                new_query["bool"], "must", fix_query(val, top=False, context=context)
+                new_query["bool"],
+                "must",
+                fix_query(val, top=False, context=context),
             )
         elif key == "not" and val.get("filter"):
             new_query.setdefault("bool", {})
@@ -184,9 +190,13 @@ def fix_query(query, top=True, context=None):
             }
         elif key == "not":
             new_query.setdefault("bool", {})
-            new_query["bool"] = {"must_not": fix_query(val, top=False, context=context)}
+            new_query["bool"] = {
+                "must_not": fix_query(val, top=False, context=context)
+            }
         elif key == "_type":
-            new_query[RESOURCE_FIELD] = fix_query(val, top=False, context=context)
+            new_query[RESOURCE_FIELD] = fix_query(
+                val, top=False, context=context
+            )
         elif key == "bool":
             new_query.setdefault("bool", {})
             for _key, _val in val.items():
@@ -204,7 +214,9 @@ def fix_query(query, top=True, context=None):
             if context == "sort":
                 new_query[key] = {
                     "path": val["path"],
-                    "filter": fix_query(val["filter"], top=False, context=context),
+                    "filter": fix_query(
+                        val["filter"], top=False, context=context
+                    ),
                 }
             else:
                 new_query[key] = {
@@ -231,7 +243,9 @@ def fix_query(query, top=True, context=None):
             and context != "aggs"
             and not isinstance(val, str)
         ):
-            new_query["bool"] = {"must": fix_query(val, top=False, context=context)}
+            new_query["bool"] = {
+                "must": fix_query(val, top=False, context=context)
+            }
         elif top:
             new_query[key] = fix_query(val, top=False, context=key)
         else:
@@ -247,8 +261,12 @@ def fix_query(query, top=True, context=None):
     if top:
         logger.debug(
             "query %s fixed %s",
-            json.dumps(query, indent=2, default=ElasticJSONSerializer().default),
-            json.dumps(new_query, indent=2, default=ElasticJSONSerializer().default),
+            json.dumps(
+                query, indent=2, default=ElasticJSONSerializer().default
+            ),
+            json.dumps(
+                new_query, indent=2, default=ElasticJSONSerializer().default
+            ),
         )
 
     return new_query
@@ -397,13 +415,16 @@ class Elastic(DataLayer):
                     "mapping error, updating settings resource=%s", _resource
                 )
 
-    def _init_index(self, es, index, settings=None, mapping=None):
+    def _init_index(
+        self, es: Elasticsearch, index: str, settings=None, mappings=None
+    ):
         if not es.indices.exists(index):
-            self._create_index_from_alias(es, index, settings)
-        elif settings:
-            self._put_settings(es, index, settings)
-        if mapping:
-            self._put_mapping(es, index, mapping)
+            self._create_index_from_alias(es, index, settings, mappings)
+        else:
+            if settings:
+                self._put_settings(es, index, settings)
+            if mappings:
+                self._put_mappings(es, index, mappings)
 
     def get_datasource(self, resource):
         return getattr(self, "_datasource", self.datasource)(resource)
@@ -440,17 +461,22 @@ class Elastic(DataLayer):
         elif schema["type"] == "integer":
             return {"type": "integer"}
 
-    def _create_index_from_alias(self, es, alias, settings=None):
+    def _create_index_from_alias(
+        self, es: Elasticsearch, alias: str, settings=None, mappings=None
+    ) -> None:
         """Create new index and ignore if it exists already."""
-        try:
-            index = generate_index_name(alias)
-            self._create_index(es, index, settings)
-            es.indices.put_alias(index, alias)
-            logger.info("created index alias=%s index=%s" % (alias, index))
-        except elasticsearch.TransportError:  # index exists
-            pass
+        index = generate_index_name(alias)
+        es.indices.create(
+            index=index,
+            body={
+                "aliases": {alias: {}},
+                "settings": {"index": settings["settings"]} if settings else {},
+                "mappings": fix_mapping(mappings) if mappings else {},
+            },
+        )
+        logger.info("created index index=%s alias=%s", index, alias)
 
-    def _create_index(self, es, index, settings=None):
+    def _create_index(self, es: Elasticsearch, index, settings=None):
         args = {"index": index, "body": {}}
         if settings:
             args["body"].update(settings)
@@ -502,7 +528,7 @@ class Elastic(DataLayer):
         properties["properties"].pop("_id", None)
         return properties
 
-    def _put_mapping(self, es, index, mapping=None):
+    def _put_mappings(self, es, index, mapping=None):
         if mapping:
             es.indices.put_mapping(index=index, body=fix_mapping(mapping))
 
@@ -549,7 +575,11 @@ class Elastic(DataLayer):
 
     def _get_default_search_params(self):
         """Return default search arguments"""
-        return {"track_total_hits": self.app.config["ELASTICSEARCH_TRACK_TOTAL_HITS"]}
+        return {
+            "track_total_hits": self.app.config[
+                "ELASTICSEARCH_TRACK_TOTAL_HITS"
+            ]
+        }
 
     def find(self, resource, req, sub_resource_lookup, **kwargs):
         """Find documents for resource."""
@@ -602,7 +632,9 @@ class Elastic(DataLayer):
             if sub_resource_lookup
             else None
         )
-        filters.append(json.loads(args.get("filter")) if "filter" in args else None)
+        filters.append(
+            json.loads(args.get("filter")) if "filter" in args else None
+        )
         filters.extend(args.get("filters") if "filters" in args else [])
 
         if req.where:
@@ -631,7 +663,9 @@ class Elastic(DataLayer):
 
                     if highlights:
                         query["highlight"] = highlights
-                        query["highlight"].setdefault("require_field_match", False)
+                        query["highlight"].setdefault(
+                            "require_field_match", False
+                        )
 
         source_projection = self.get_projected_fields(req, resource)
         args = self._es_args(resource, source_projections=source_projection)
@@ -694,7 +728,9 @@ class Elastic(DataLayer):
         """
         try:
             args = getattr(req, "args", {})
-            return ",".join(json.loads(args.get("projections")) + [RESOURCE_FIELD])
+            return ",".join(
+                json.loads(args.get("projections")) + [RESOURCE_FIELD]
+            )
         except (AttributeError, TypeError):
             pass
         if (
@@ -721,7 +757,9 @@ class Elastic(DataLayer):
 
             try:
                 args["size"] = 1
-                hits = self.elastic(resource).search(body=fix_query(query), **args)
+                hits = self.elastic(resource).search(
+                    body=fix_query(query), **args
+                )
                 docs = self._parse_hits(hits, resource)
                 return docs.first()
             except elasticsearch.NotFoundError:
@@ -763,7 +801,9 @@ class Elastic(DataLayer):
                 query = {"query": {"bool": {"must": [{"term": {"_id": _id}}]}}}
                 try:
                     args["size"] = 1
-                    hits = self.elastic(resource).search(body=fix_query(query), **args)
+                    hits = self.elastic(resource).search(
+                        body=fix_query(query), **args
+                    )
                     docs = self._parse_hits(hits, resource)
                     return docs.first()
                 except elasticsearch.NotFoundError:
@@ -809,7 +849,9 @@ class Elastic(DataLayer):
             doc[RESOURCE_FIELD] = resource
             if parent_type and doc.get(parent_type.get("field")):
                 doc["_parent"] = doc.get(parent_type.get("field"))
-            action = {"_source": self._prepare_for_storage(resource, doc, kwargs)}
+            action = {
+                "_source": self._prepare_for_storage(resource, doc, kwargs)
+            }
             if doc.get("_id"):
                 action["_id"] = doc["_id"]
             actions.append(action)
@@ -866,7 +908,9 @@ class Elastic(DataLayer):
         :param resource: resource name
         """
         args = self._es_args(resource)
-        res = self.elastic(resource).count(body={"query": {"match_all": {}}}, **args)
+        res = self.elastic(resource).count(
+            body={"query": {"match_all": {}}}, **args
+        )
         return res.get("count", 0) == 0
 
     def put_settings(self, resource, settings=None):
@@ -975,7 +1019,9 @@ class Elastic(DataLayer):
         :param resource: resource name
         """
         if self._resource_config(resource, "FORCE_REFRESH", True) or force:
-            self.elastic(resource).indices.refresh(self._resource_index(resource))
+            self.elastic(resource).indices.refresh(
+                self._resource_index(resource)
+            )
 
     def _resource_prefix(self, resource=None):
         """Get elastic prefix for given resource.
@@ -1011,7 +1057,9 @@ class Elastic(DataLayer):
         for resource in self._get_elastic_resources():
             try:
                 alias = self._resource_index(resource)
-                alias_info = self.elastic(resource).indices.get_alias(name=alias)
+                alias_info = self.elastic(resource).indices.get_alias(
+                    name=alias
+                )
                 for index in alias_info:
                     self.elastic(resource).indices.delete(index)
             except elasticsearch.exceptions.NotFoundError:
@@ -1048,13 +1096,14 @@ class Elastic(DataLayer):
         es = self.elastic(resource)
         alias = self._resource_index(resource)
         settings = self._resource_config(resource, "SETTINGS")
-        mapping = self._resource_mapping(resource)
+        mappings = self._resource_mapping(resource)
 
-        old_index = None
+        old_index = old_mappings = None
         try:
             indexes = es.indices.get_alias(name=alias)
             for index, aliases in indexes.items():
                 old_index = index
+                old_mappings = es.indices.get_mapping(index=index)
                 specs = aliases["aliases"][alias]
                 if specs and specs["is_write_index"]:
                     break
@@ -1066,8 +1115,13 @@ class Elastic(DataLayer):
 
         # create new index
         new_index = generate_index_name(alias)
-        self._create_index(es, new_index, settings)
-        self._put_mapping(es, new_index, mapping)
+        es.indices.create(
+            index=new_index,
+            body={
+                "settings": {"index": settings["settings"]} if settings else {},
+                "mappings": fix_mapping(mappings) if mappings else {},
+            },
+        )
 
         print("NEW INDEX", new_index)
 
@@ -1107,31 +1161,20 @@ class Elastic(DataLayer):
 
         # tmp index will be used for new items arriving during reindex
         tmp_index = f"{old_index}-tmp"
-        self._create_index(es, tmp_index, settings)
-        self._put_mapping(es, tmp_index, mapping)
-        print("TMP INDEX", tmp_index)
-
-        # add tmp index as writable
-        es.indices.update_aliases(
+        es.indices.rollover(
+            alias=alias,
+            new_index=tmp_index,
             body={
-                "actions": [
-                    {
-                        "add": {  # add tmp index as write index
-                            "index": tmp_index,
-                            "alias": alias,
-                            "is_write_index": True,
-                        },
-                    },
-                    {
-                        "add": {  # make sure the old index is not write index
-                            "index": old_index,
-                            "alias": alias,
-                            "is_write_index": False,
-                        },
-                    },
-                ],
-            }
+                "mappings": (
+                    old_mappings[old_index]["mappings"]
+                    if old_mappings
+                    else mappings
+                ),
+                "settings": {"index": settings["settings"]} if settings else {},
+            },
         )
+
+        print("TMP INDEX", tmp_index)
 
         _background_reindex(
             es, old_index, new_index, requests_per_second=requests_per_second
@@ -1207,7 +1250,9 @@ def _background_reindex(
 
     # now it can render progress
     last_created = 0
-    with progressbar(length=task["task"]["status"]["total"], label="Reindexing") as bar:
+    with progressbar(
+        length=task["task"]["status"]["total"], label="Reindexing"
+    ) as bar:
         while True:
             time.sleep(2.0)
             try:
@@ -1287,7 +1332,9 @@ def build_elastic_query(doc):
 
     for key in doc.keys():
         if key == "q":
-            elastic_query["query"]["bool"]["must"].append(_build_query_string(doc["q"]))
+            elastic_query["query"]["bool"]["must"].append(
+                _build_query_string(doc["q"])
+            )
         else:
             _value = doc[key]
             filters.append(
@@ -1311,7 +1358,11 @@ def _build_query_string(q, default_field=None, default_operator="AND"):
 
     def _is_phrase_search(query_string):
         clean_query = query_string.strip()
-        return clean_query and clean_query.startswith('"') and clean_query.endswith('"')
+        return (
+            clean_query
+            and clean_query.startswith('"')
+            and clean_query.endswith('"')
+        )
 
     def _get_phrase(query_string):
         return query_string.strip().strip('"')
