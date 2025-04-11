@@ -581,8 +581,7 @@ class Elastic(DataLayer):
             ]
         }
 
-    def find(self, resource, req, sub_resource_lookup, **kwargs):
-        """Find documents for resource."""
+    def get_find_kwargs(self, resource, req, sub_resource_lookup) -> dict:
         args = getattr(req, "args", request.args if request else {}) or {}
         source_config = app.config["DOMAIN"][resource]["datasource"]
 
@@ -672,10 +671,18 @@ class Elastic(DataLayer):
         default_params = self._get_default_search_params()
         if args is not None:
             default_params.update(args)
-        args = default_params
+
+        return dict(
+            **default_params,
+            body=fix_query(query),
+        )
+
+    def find(self, resource, req, sub_resource_lookup, **kwargs):
+        """Find documents for resource."""
+        search_args = self.get_find_kwargs(resource, req, sub_resource_lookup)
 
         try:
-            hits = self.elastic(resource).search(body=fix_query(query), **args)
+            hits = self.elastic(resource).search(**search_args)
         except elasticsearch.exceptions.RequestError as e:
             if e.status_code == 400 and "No mapping found for" in e.error:
                 hits = {}
@@ -742,6 +749,16 @@ class Elastic(DataLayer):
             )[2]
             return ",".join([key for key, val in projection.items() if val])
 
+    def get_find_one_kwargs(self, resource, **lookup) -> dict:
+        args = self._es_args(resource)
+        filters = [{"term": {key: val}} for key, val in lookup.items()]
+        query = {"query": {"bool": {"must": filters}}}
+        args["size"] = 1
+        return dict(
+            **args,
+            body=fix_query(query),
+        )
+
     def find_one(self, resource, req, **lookup):
         """Find single document, if there is _id in lookup use that, otherwise filter."""
         if config.ID_FIELD in lookup:
@@ -750,20 +767,14 @@ class Elastic(DataLayer):
                 _id=lookup[config.ID_FIELD],
                 parent=lookup.get("parent"),
             )
-        else:
-            args = self._es_args(resource)
-            filters = [{"term": {key: val}} for key, val in lookup.items()]
-            query = {"query": {"bool": {"must": filters}}}
 
-            try:
-                args["size"] = 1
-                hits = self.elastic(resource).search(
-                    body=fix_query(query), **args
-                )
-                docs = self._parse_hits(hits, resource)
-                return docs.first()
-            except elasticsearch.NotFoundError:
-                return
+        search_args = self.get_find_one_kwargs(resource, **lookup)
+        try:
+            hits = self.elastic(resource).search(**search_args)
+            docs = self._parse_hits(hits, resource)
+            return docs.first()
+        except elasticsearch.NotFoundError:
+            return
 
     def _find_by_id(self, resource, _id, parent=None):
         """Find the document by Id. If parent is not provided then on
@@ -859,7 +870,7 @@ class Elastic(DataLayer):
         self._refresh_resource_index(resource)
         return res
 
-    def update(self, resource, id_, updates):
+    def update(self, resource, id_, updates, original=None):
         """Update document in index."""
         args = self._es_args(resource, refresh=True)
         if self._get_retry_on_conflict():
@@ -867,7 +878,7 @@ class Elastic(DataLayer):
         doc = self._prepare_for_storage(resource, updates, args)
         return self.elastic(resource).update(id=id_, body={"doc": doc}, **args)
 
-    def replace(self, resource, id_, document):
+    def replace(self, resource, id_, document, original=None):
         """Replace document in index."""
         args = self._es_args(resource, refresh=True)
         doc = self._prepare_for_storage(resource, document, args)
@@ -939,7 +950,7 @@ class Elastic(DataLayer):
         es.indices.put_settings(index=index, body=settings)
         es.indices.open(index=index)
 
-    def _parse_hits(self, hits, resource):
+    def get_hits_docs(self, hits, resource) -> list[dict]:
         """Parse hits response into documents."""
         datasource = self.get_datasource(resource)
         schema = {}
@@ -949,7 +960,11 @@ class Elastic(DataLayer):
         docs = []
         for hit in hits.get("hits", {}).get("hits", []):
             docs.append(format_doc(hit, schema, dates))
-        return ElasticCursor(hits, docs)
+        return docs
+
+    def _parse_hits(self, hits, resource):
+        """Parse hits response into documents."""
+        return ElasticCursor(hits, self.get_hits_docs(hits, resource))
 
     def _es_args(self, resource, refresh=None, source_projections=None):
         """Get index and doctype args."""
